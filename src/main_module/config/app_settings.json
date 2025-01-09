@@ -1,0 +1,12 @@
+{
+    "calibration": {
+        "target_type": "cube",
+        "cube_size_mm": 100
+    },
+    "cameras": {
+        "exposure": 100
+    },
+    "app": {
+        "data_save_path": "dklfd"
+    }
+}
