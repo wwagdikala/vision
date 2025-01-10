@@ -43,3 +43,9 @@ class MeasurementError(ValidationSystemError):
         super().__init__(message, recovery_hint)
         self.accuracy = accuracy
         self.threshold = threshold
+
+# class CalibrationError(Exception):
+#     """Custom exception for calibration errors"""
+#     def __init__(self, message: str, recovery_hint: Optional[str] = None):
+#         super().__init__(message)
+#         self.recovery_hint = recovery_hint
