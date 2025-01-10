@@ -1,22 +1,22 @@
 from PySide6.QtCore import QObject
 from PySide6.QtCore import Signal, Property
 from services.service_locator import ServiceLocator
-from constants.settings_constants import CalibrationTarget
+from core.constants.settings_constants import CalibrationTarget
+from services.navigation_service import ViewType
 
 class SettingsViewModel(QObject):
     target_type_changed = Signal()
     def __init__(self):
         super().__init__()
         self.settings_locator = ServiceLocator.get_instance().get_service("settings_service")
+        self.naviation_sevice = ServiceLocator.get_instance().get_service("navigation_service")
         self._target_type = self.get_settings("calibration", "target_type")
         self.connect_signals()
 
-    @Property(str, notify=target_type_changed)
-    def target_type(self):
+    def get_target_type(self):
         return self._target_type
     
-    @target_type.setter
-    def target_type(self, value):
+    def set_target_type(self, value):
         if CalibrationTarget.is_valid(value):
             self._target_type = value
             self.update_settings("calibration", "target_type", value)
@@ -24,6 +24,8 @@ class SettingsViewModel(QObject):
         else:
             print(f"Invalid target type: {value}")
     
+    target_type = Property(str, get_target_type, set_target_type, notify=target_type_changed)
+
     def get_target_types(self):
         return CalibrationTarget.list()
 
@@ -38,6 +40,9 @@ class SettingsViewModel(QObject):
 
     def on_setting_changed(self, section: str, key: str, value):
         pass
+
+    def navigate_to(self, view_type: "ViewType"):
+        self.naviation_sevice.navigate_to(view_type)
 
         
 

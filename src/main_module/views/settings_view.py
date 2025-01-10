@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
                               QComboBox, QLineEdit, QPushButton,
                               QFileDialog)
 from services.service_locator import ServiceLocator 
+from services.navigation_service import ViewType
 
 class SettingsView(QWidget):
     def __init__(self):
@@ -19,16 +20,13 @@ class SettingsView(QWidget):
         
         self.target_type_combo = QComboBox()
         self.target_type_combo.addItems(self.viewmodel.get_target_types())
-        self.target_type_combo.currentTextChanged.connect(
-            lambda v: self.viewmodel.update_setting("calibration", "target_type", v)
-        )
+        # self.target_type_combo.currentTextChanged.connect(lambda v: )
         
         self.cube_size_edit = QLineEdit()
         self.cube_size_edit.setPlaceholderText("Size in mm")
-        self.cube_size_edit.textChanged.connect(
-            lambda v: self.viewmodel.update_setting("calibration", "cube_size_mm", float(v) if v else 0)
-        )
+
         calibration_layout.addRow("Cube Size (mm):", self.cube_size_edit)
+        calibration_layout.addRow("Target Type:", self.target_type_combo)
         
         calibration_group.setLayout(calibration_layout)
         main_layout.addWidget(calibration_group)
@@ -36,13 +34,13 @@ class SettingsView(QWidget):
         # Camera Settings Group
         camera_group = QGroupBox("Camera Settings")
         camera_layout = QFormLayout()
-        
+
+        self.num_of_cameras = QLabel("Number of Cameras")
+        self.num_of_cameras_combo = QComboBox()
+
         self.exposure_edit = QLineEdit()
-        self.exposure_edit.textChanged.connect(
-            lambda v: self.viewmodel.update_setting("cameras", "exposure", int(v) if v else 0)
-        )
         camera_layout.addRow("Exposure:", self.exposure_edit)
-        
+        camera_layout.addRow(self.num_of_cameras, self.num_of_cameras_combo)
         camera_group.setLayout(camera_layout)
         main_layout.addWidget(camera_group)
 
@@ -64,10 +62,26 @@ class SettingsView(QWidget):
         path_layout.addWidget(browse_btn)
         app_layout.addRow("Data Save Path:", path_layout)
         
+        save_btn = QPushButton("Save")
+        back_btn = QPushButton("Back")
+        save_btn.clicked.connect(self.save_settings)
+        back_btn.clicked.connect(self.navigate_back)
+
+        nav_group = QWidget()
+        nav_group_layout = QHBoxLayout()
+        nav_group_layout.addStretch()
+        nav_group_layout.addWidget(back_btn)
+        nav_group_layout.addWidget(save_btn)
+        
+        nav_group.setLayout(nav_group_layout)
         app_group.setLayout(app_layout)
+
+
         main_layout.addWidget(app_group)
         
         main_layout.addStretch()
+        main_layout.addWidget(nav_group)
+
 
     def browse_data_path(self):
         """
@@ -84,3 +98,9 @@ class SettingsView(QWidget):
             self.data_path_edit.setText(directory)
             # Update the setting in our ViewModel
             self.view_model.set_data_save_path(directory)
+
+    def save_settings(self):
+        self.viewmodel.update_settings()
+
+    def navigate_back(self):
+        self.viewmodel.navigate_to(ViewType.MAIN)

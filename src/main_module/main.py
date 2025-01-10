@@ -19,14 +19,16 @@ from main_module.views.settings_view import SettingsView
 from calibration_module.views.wizard_view import CalibrationWizard
 
 from calibration_module.models.wizard_model import WizardModel
-from core.error_handeling.error_manager import ErrorManager
+from core.error_handling.error_manager import ErrorManager
 
 def initialize(locator):
+    locator.register_service("settings_service", SettingsService())
+
     error_manager = ErrorManager()
+
     locator.register_service("error_manager", error_manager)
     calibration_module = CalibrationModule()
     wizard_view = calibration_module.initalize()
-    locator.register_service("settings_service", SettingsService())
     locator.register_service("calibration_module", calibration_module)
     
 
