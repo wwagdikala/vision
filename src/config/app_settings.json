@@ -1,68 +1,38 @@
 {
-  "calibration": {
-    "camera_setup": {
-        "type": "stereo_3",
-        "cameras": {
-            "stereo_3": {
-                "num_cameras": 3,
-                "arrangement": "coplanar",
-                "validation": {
-                    "camera_distances_mm": {
-                        "cam1_to_cam2": 200,
-                        "cam2_to_cam3": 200
-                    },
-                    "max_baseline_error_percent": 5.0
+    "calibration": {
+        "camera_setup": {
+            "type": "stereo_3_coplanar",
+            "cameras": {
+                "stereo_3_coplanar": {
+                    "num_cameras": 3,
+                    "validation": {
+                        "camera_distances_mm": {
+                            "cam1_to_cam2": 200,
+                            "cam2_to_cam3": 200
+                        }
+                    }
                 },
-                "working_volume": {
-                    "distance_from_cameras_mm": {
-                        "min": 300,
-                        "max": 500
+                "circle_5": {
+                    "num_cameras": 5,
+                    "validation": {
+                        "expected_circle_diameter_mm": 500
                     }
                 }
-            },
-            "circle_5": {
-                "num_cameras": 5,
-                "validation": {
-                    "expected_circle_diameter_mm": 500
-                }
             }
-        }
-    },
-    "target_type": "cube",
-    "target_settings": {
-        "cube": {
-            "size_mm": 100,
-            "min_corners": 6,
-            "corner_uncertainty_threshold": 0.5,
-            "refinement_window_size": 11
         },
-        "cube_circles": {
-            "size_mm": 100,
-            "circles_per_face": 9,
-            "circle_diameter_mm": 8,
-            "min_circles": 6
+        "target_type": "cube",
+        "target_settings": {
+            "cube": {
+                "size_mm": 100,
+                "min_corners": 6,
+                "corner_uncertainty_threshold": 0.5,
+                "refinement_window_size": 11
+            }
         },
-        "checkerboard": {
-            "width_squares": 9,
-            "height_squares": 6,
-            "square_size_mm": 25,
-            "min_corners": 20
+        "quality_thresholds": {
+            "rms_error_threshold_mm": 0.2,
+            "min_cameras_per_point": 3,
+            "max_reprojection_error_mm": 0.2
         }
-    },
-    "quality_thresholds": {
-        "rms_error_threshold_mm": 0.2,
-        "min_cameras_per_point": 3,
-        "max_reprojection_error_mm": 0.2
-    },
-    "calibration_settings": {
-      "rms_error_threshold_mm": 0.2,
-      "min_cameras_per_point": 3
     }
-  },
-  "cameras": {
-    "exposure": 100
-  },
-  "app": {
-    "data_save_path": "dklfd"
-  }
 }
