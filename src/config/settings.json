@@ -1,0 +1,9 @@
+{
+  "calibration": {
+    "target_type": "cube"
+  },
+
+  "cameras": {
+    "camera_setup": "stereo_3"
+  }
+}

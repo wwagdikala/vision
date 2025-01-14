@@ -1,38 +1,38 @@
 {
-    "calibration": {
-        "camera_setup": {
-            "type": "stereo_3_coplanar",
-            "cameras": {
-                "stereo_3_coplanar": {
-                    "num_cameras": 3,
-                    "validation": {
-                        "camera_distances_mm": {
-                            "cam1_to_cam2": 200,
-                            "cam2_to_cam3": 200
-                        }
-                    }
-                },
-                "circle_5": {
-                    "num_cameras": 5,
-                    "validation": {
-                        "expected_circle_diameter_mm": 500
-                    }
-                }
+  "calibration": {
+    "camera_setup": {
+      "type": "stereo_3",
+      "cameras": {
+        "stereo_3": {
+          "num_cameras": 3,
+          "validation": {
+            "camera_distances_mm": {
+              "cam1_to_cam2": 200,
+              "cam2_to_cam3": 200
             }
+          }
         },
-        "target_type": "cube",
-        "target_settings": {
-            "cube": {
-                "size_mm": 100,
-                "min_corners": 6,
-                "corner_uncertainty_threshold": 0.5,
-                "refinement_window_size": 11
-            }
-        },
-        "quality_thresholds": {
-            "rms_error_threshold_mm": 0.2,
-            "min_cameras_per_point": 3,
-            "max_reprojection_error_mm": 0.2
+        "circle_5": {
+          "num_cameras": 5,
+          "validation": {
+            "expected_circle_diameter_mm": 500
+          }
         }
+      }
+    },
+    "target_type": "cube",
+    "target_settings": {
+      "cube": {
+        "size_mm": 100,
+        "min_corners": 6,
+        "corner_uncertainty_threshold": 0.5,
+        "refinement_window_size": 11
+      }
+    },
+    "quality_thresholds": {
+      "rms_error_threshold_mm": 0.2,
+      "min_cameras_per_point": 3,
+      "max_reprojection_error_mm": 0.2
     }
+  }
 }

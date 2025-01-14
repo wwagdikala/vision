@@ -94,8 +94,8 @@ class SettingsService(QObject):
     def load_settings(self):
         """Load settings from file, use defaults if necessary"""
         try:
-            if self.settings_file.exists():
-                with open(self.settings_file, 'r') as f:
+            if self._settings_file.exists():
+                with open(self._settings_file, 'r') as f:
                     content = f.read()
                     if content.strip():
                         self._settings.update(json.loads(content))

@@ -26,8 +26,6 @@ class SettingsViewModel(QObject):
         self.connect_signals()
 
     def _load_settings(self):
-        """Load settings from service and create a working copy"""
-        # Get all settings sections we care about
         sections = ["calibration", "cameras", "app"]
         
         for section in sections:
@@ -40,7 +38,6 @@ class SettingsViewModel(QObject):
         self._pending_settings = deepcopy(self._current_settings)
 
     def _get_section_keys(self, section: str) -> list:
-        """Return expected keys for each section"""
         section_keys = {
             "calibration": ["target_type", "cube_size_mm"],
             "cameras": ["exposure"],

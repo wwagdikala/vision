@@ -7,6 +7,8 @@ from services.service_locator import ServiceLocator
 
 class CameraModule:
     def __init__(self):
+        self.settings_service = ServiceLocator.get_instance().get_service("settings_service")
+        self._number_of_cameras = self.settings_service.get_settings("calibration", "camera_setup", "num_cameras")
         self.camera_models = []
         self.camera_viewmodels = []
 

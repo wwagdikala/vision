@@ -9,7 +9,7 @@ class TargetDetectorFactory:
     """Factory class for creating target detectors based on configuration"""
     
     @staticmethod
-    def create_target_detector(target_type: CalibrationTarget, settings: Dict) -> TargetDetector:
+    def create(target_type: CalibrationTarget, settings: Dict) -> TargetDetector:
         """
         Create appropriate target detector based on type
         

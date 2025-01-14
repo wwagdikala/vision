@@ -21,7 +21,7 @@ class CameraSetupPage(QWizardPage):
         # Initialize settings-dependent attributes before UI setup
         self.camera_setup = self.settings_service.get_settings(
             "calibration", "camera_setup", "type"
-        ) or "stereo_3_coplanar"  # Default value if not found
+        ) or "stereo_3"  # Default value if not found
         self.target_type = self.settings_service.get_settings(
             "calibration", "target_type"
         ) or "cube"  # Default value if not found
@@ -142,7 +142,7 @@ class CameraSetupPage(QWizardPage):
         return camera_view
 
     def get_num_cameras(self):
-        return 3 if self.camera_setup == "stereo_3_coplanar" else 5
+        return 3 if self.camera_setup == "stereo_3" else 5
 
     def update_instructions(self):
         """Update instructions based on target type"""

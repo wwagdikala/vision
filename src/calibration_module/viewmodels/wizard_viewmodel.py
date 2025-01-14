@@ -74,7 +74,7 @@ class WizardViewModel(QObject):
             print(f"Error loading configuration: {str(e)}")
             # Use default configuration
             self.config = CalibrationConfig(
-                camera_setup=CameraSetupType.STEREO_3_COPLANAR,
+                camera_setup=CameraSetupType.STEREO_3,
                 target_type=CalibrationTarget.CUBE,
                 target_settings={
                     "size_mm": 100,

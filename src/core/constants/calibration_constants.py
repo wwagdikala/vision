@@ -7,7 +7,8 @@ from enum import Enum
 from typing import List
 
 class CameraSetupType(Enum):
-    STEREO_3_COPLANAR = 'stereo_3_coplanar'  # 3 cameras in coplanar arrangement
+    STEREO_2 = 'stereo_2'                     # 2 cameras in stereo arrangement
+    STEREO_3 = 'stereo_3'  # 3 cameras in coplanar arrangement
     CIRCLE_5 = 'circle_5'                     # 5 cameras in circle
 
     @classmethod
