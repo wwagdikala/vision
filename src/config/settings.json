@@ -1,9 +1,14 @@
 {
   "calibration": {
-    "target_type": "cube"
+    "target_type": "checkerboard",
+    "square_size": 10,
+    "required_angles": 2,
+    "min_quality_score": "0.10000000000000002",
+    "min_coverage": 0.05,
+    "pattern_rows": 9,
+    "pattern_cols": 9
   },
-
   "cameras": {
-    "camera_setup": "stereo_3"
+    "camera_setup": "stereo_2"
   }
 }

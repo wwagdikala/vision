@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 from PySide6.QtCore import QObject, Signal
 
+
 class CameraModel(QObject):
     frame_ready = Signal(np.ndarray)
     error_occurred = Signal(str)
@@ -19,13 +20,13 @@ class CameraModel(QObject):
             self.camera = cv2.VideoCapture(self.camera_id)
             if not self.camera.isOpened():
                 raise Exception("Could not open camera")
-            
+
             self.is_running = True
             self.status_changed.emit("Camera running")
             return True
-            
+
         except Exception as e:
-            self.error_occurred.emit(str(e))
+            self.error_occurred.emit(f"Camera {self.camera_id} error: {str(e)}")
             return False
 
     def stop(self):

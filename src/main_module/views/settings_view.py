@@ -1,141 +1,108 @@
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, 
-                             QGroupBox, QFormLayout, QLabel, 
-                             QComboBox, QLineEdit, QPushButton,
-                             QFileDialog, QMessageBox)
-from PySide6.QtCore import Qt
-from services.service_locator import ServiceLocator 
+from PySide6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QFormLayout,
+    QComboBox,
+    QGroupBox,
+    QSpinBox,
+    QDoubleSpinBox,
+    QPushButton,
+)
+from services.service_locator import ServiceLocator
+
 
 class SettingsView(QWidget):
     def __init__(self):
         super().__init__()
-        self.locator = ServiceLocator.get_instance()
-        self.viewmodel = self.locator.get_service("settings_viewmodel")
+        self.viewmodel = ServiceLocator.get_instance().get_service("settings_viewmodel")
         self.init_ui()
         self.connect_signals()
 
     def init_ui(self):
-        main_layout = QVBoxLayout(self)
+        layout = QVBoxLayout(self)
 
-        # Calibration Settings Group
-        calibration_group = QGroupBox("Calibration Settings")
-        calibration_layout = QFormLayout()
-        
+        # Settings group
+        settings_group = QGroupBox("System Settings")
+        form_layout = QFormLayout()
+
+        # Camera setup combo
+        self.camera_setup_combo = QComboBox()
+        self.camera_setup_combo.addItems(self.viewmodel.get_camera_setups())
+        self.camera_setup_combo.setCurrentText(self.viewmodel.camera_setup)
+        form_layout.addRow("Camera Setup:", self.camera_setup_combo)
+
+        # Target type combo
         self.target_type_combo = QComboBox()
         self.target_type_combo.addItems(self.viewmodel.get_target_types())
-        current_target = self.viewmodel.target_type
-        self.target_type_combo.setCurrentText(current_target)
-        
-        self.cube_size_edit = QLineEdit()
-        self.cube_size_edit.setPlaceholderText("Size in mm")
+        self.target_type_combo.setCurrentText(self.viewmodel.target_type)
+        form_layout.addRow("Target Type:", self.target_type_combo)
 
-        # Add widgets to layout
-        calibration_layout.addRow("Target Type:", self.target_type_combo)
-        calibration_layout.addRow("Cube Size (mm):", self.cube_size_edit)
-        calibration_group.setLayout(calibration_layout)
+        self.pattern_rows_spin = QSpinBox()
+        self.pattern_rows_spin.setRange(2, 20)
+        self.pattern_rows_spin.setValue(int(self.viewmodel.get_setting("pattern_rows")))
+        form_layout.addRow("Pattern Rows:", self.pattern_rows_spin)
 
-        # Add group to main layout
-        main_layout.addWidget(calibration_group)
+        self.pattern_cols_spin = QSpinBox()
+        self.pattern_cols_spin.setRange(2, 20)
+        self.pattern_cols_spin.setValue(int(self.viewmodel.get_setting("pattern_cols")))
+        form_layout.addRow("Pattern Columns:", self.pattern_cols_spin)
 
-        # Camera Settings Group
-        camera_group = QGroupBox("Camera Settings")
-        camera_layout = QFormLayout()
-        
-        self.exposure_edit = QLineEdit()
-        self.number_of_cameras = QComboBox()
-        self.number_of_cameras.addItems(self.viewmodel.get_camera_setups())
+        # Add quality threshold settings
+        self.quality_score_spin = QDoubleSpinBox()
+        self.quality_score_spin.setRange(0.1, 1.0)
+        self.quality_score_spin.setSingleStep(0.05)
+        self.quality_score_spin.setValue(
+            float(self.viewmodel.get_setting("min_quality_score"))
+        )
+        form_layout.addRow("Min Quality Score:", self.quality_score_spin)
 
-        camera_layout.addRow("Number of cameras", self.number_of_cameras)
-        camera_layout.addRow("Exposure:", self.exposure_edit)
-        camera_group.setLayout(camera_layout)
+        self.coverage_spin = QDoubleSpinBox()
+        self.coverage_spin.setRange(0.1, 1.0)
+        self.coverage_spin.setSingleStep(0.05)
+        self.coverage_spin.setValue(float(self.viewmodel.get_setting("min_coverage")))
+        form_layout.addRow("Min Coverage:", self.coverage_spin)
 
-        # Add group to main layout
-        main_layout.addWidget(camera_group)
+        settings_group.setLayout(form_layout)
+        layout.addWidget(settings_group)
+        layout.addStretch()
 
-        # Application Settings Group
-        app_group = QGroupBox("Application Settings")
-        app_layout = QFormLayout()
-        
-        # Data path with browse button
-        path_layout = QHBoxLayout()
-        self.data_path_edit = QLineEdit()
-        browse_btn = QPushButton("Browse...")
-        browse_btn.clicked.connect(self.browse_data_path)
-        
-        path_layout.addWidget(self.data_path_edit)
-        path_layout.addWidget(browse_btn)
-        app_layout.addRow("Data Save Path:", path_layout)
-        app_group.setLayout(app_layout)
-        main_layout.addWidget(app_group)
-        
-        # Action Buttons
-        button_layout = QHBoxLayout()
-        
-        # Save Button
-        self.save_btn = QPushButton("Save Changes")
-        self.save_btn.clicked.connect(self.viewmodel.save_settings)
-        self.save_btn.setEnabled(False)  # Initially disabled
-        
-        # Revert Button
-        self.revert_btn = QPushButton("Revert Changes")
-        self.revert_btn.clicked.connect(self.viewmodel.revert_changes)
-        self.revert_btn.setEnabled(False)  # Initially disabled
-        
-        button_layout.addWidget(self.save_btn)
-        button_layout.addWidget(self.revert_btn)
-        button_layout.setAlignment(Qt.AlignmentFlag.AlignRight)
-        
-        main_layout.addLayout(button_layout)
-        main_layout.addStretch()
+        buttons_section = QWidget()
+        self.button_layout = QHBoxLayout()
+        self.back_btn = QPushButton("Back")
+        self.button_layout.addStretch()
+        self.button_layout.addWidget(self.back_btn)
+        buttons_section.setLayout(self.button_layout)
+        layout.addWidget(buttons_section)
 
     def connect_signals(self):
-        # Connect UI elements to ViewModel
+        # Connect UI to ViewModel
+        self.camera_setup_combo.currentTextChanged.connect(
+            lambda v: self.viewmodel.update_setting("cameras.camera_setup", v)
+        )
         self.target_type_combo.currentTextChanged.connect(
-            lambda v: setattr(self.viewmodel, 'target_type', v)
+            lambda v: self.viewmodel.update_setting("calibration.target_type", v)
         )
-        self.cube_size_edit.textChanged.connect(
-            lambda v: self.viewmodel._update_pending_setting(
-                "calibration", "cube_size_mm", float(v) if v else 0
+        # Add new signals
+        self.pattern_rows_spin.valueChanged.connect(
+            lambda v: self.viewmodel.update_setting("calibration.pattern_rows", v)
+        )
+        self.pattern_cols_spin.valueChanged.connect(
+            lambda v: self.viewmodel.update_setting("calibration.pattern_cols", v)
+        )
+        self.quality_score_spin.valueChanged.connect(
+            lambda v: self.viewmodel.update_setting(
+                "calibration.min_quality_score", str(v)
             )
         )
-        self.exposure_edit.textChanged.connect(
-            lambda v: self.viewmodel._update_pending_setting(
-                "cameras", "exposure", int(v) if v else 0
-            )
+        self.coverage_spin.valueChanged.connect(
+            lambda v: self.viewmodel.update_setting("calibration.min_coverage", str(v))
         )
-        self.data_path_edit.textChanged.connect(
-            lambda v: self.viewmodel._update_pending_setting(
-                "app", "data_save_path", v
-            )
-        )
-        
-        # Connect ViewModel signals
-        self.viewmodel.settings_changed.connect(self.on_settings_changed)
-        self.viewmodel.save_completed.connect(self.on_save_completed)
-        self.viewmodel.validation_error.connect(self.show_error)
 
-    def browse_data_path(self):
-        """Handle browse button click for data save path"""
-        current_path = self.data_path_edit.text()
-        directory = QFileDialog.getExistingDirectory(
-            self,
-            "Select Data Save Directory",
-            current_path
-        )
-        if directory:  # If user didn't cancel
-            self.data_path_edit.setText(directory)
+        self.back_btn.clicked.connect(self.viewmodel.navigate_back)
+        # Update UI when settings change
+        self.viewmodel.settings_changed.connect(self.update_ui)
 
-    def on_settings_changed(self, has_changes: bool):
-        """Enable/disable save and revert buttons based on changes"""
-        self.save_btn.setEnabled(has_changes)
-        self.revert_btn.setEnabled(has_changes)
-
-    def on_save_completed(self, success: bool, message: str):
-        """Handle save completion"""
-        if success:
-            QMessageBox.information(self, "Settings Saved", message)
-        else:
-            QMessageBox.warning(self, "Save Failed", message)
-
-    def show_error(self, message: str):
-        """Display validation errors"""
-        QMessageBox.warning(self, "Validation Error", message)
+    def update_ui(self):
+        self.camera_setup_combo.setCurrentText(self.viewmodel.camera_setup)
+        self.target_type_combo.setCurrentText(self.viewmodel.target_type)
