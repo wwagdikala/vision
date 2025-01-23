@@ -2,6 +2,7 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
 from PySide6.QtGui import QImage, QPixmap, QPainter, QPen, QColor
 from PySide6.QtCore import Qt
 import numpy as np
+from services.service_locator import ServiceLocator
 
 
 class CameraView(QWidget):
@@ -130,11 +131,24 @@ class CameraView(QWidget):
     # In camera_view.py - Add to existing class
 
     def update_overlay(self, points, quality=None):
-        """Update detection overlay"""
-        self.current_detection = points
-        self.current_quality = quality
-        if self.current_pixmap is not None:
-            self.display_label.update()  # Trigger a repaint
+        # Decide if we actually have points:
+        has_points = False
+        if points is not None:
+            if isinstance(points, np.ndarray):
+                has_points = points.size > 0
+            elif isinstance(points, list):
+                has_points = len(points) > 0
+
+        # Store or clear detection
+        self.current_detection = points if has_points else None
+        self.current_quality = quality if has_points else None
+
+        # Force re-draw of the underlying (raw) frame
+        if self.current_frame is not None:
+            self.display_frame(self.current_frame)
+
+        # ALWAYS trigger update to remove old overlay
+        self.display_label.update()
 
     def paintEvent(self, event):
         """Override paint event"""
@@ -143,9 +157,9 @@ class CameraView(QWidget):
         # Only draw overlay if we have detection points and a pixmap
         if (
             self.current_detection is not None
-            and hasattr(self, "current_pixmap")
             and self.current_pixmap is not None
-        ):
+            and len(self.current_detection) > 0
+        ):  # Added length check
 
             # Create working copy of current pixmap
             working_pixmap = self.current_pixmap.copy()
@@ -241,3 +255,53 @@ class CameraView(QWidget):
 
         # Use the smaller scale to maintain aspect ratio
         return min(width_scale, height_scale)
+
+    def mousePressEvent(self, event):
+        """Handle mouse click for point selection"""
+        if not hasattr(self, "preview_active") or not self.preview_active:
+            return
+
+        # Get measurement viewmodel to check if measuring is active
+        locator = ServiceLocator.get_instance()
+        measurement_vm = locator.get_service("measurement_viewmodel")
+        if not measurement_vm.measuring_active:
+            return
+
+        # Convert click coordinates to image coordinates
+        pos = event.pos()
+        label_pos = self.display_label.mapFrom(self, pos)
+
+        if self.current_pixmap:
+            # Convert coordinates from display scale to original image scale
+            scale_factor = self._calculate_scale_factor()
+            if scale_factor > 0:
+                x = float(label_pos.x()) / scale_factor
+                y = float(label_pos.y()) / scale_factor
+
+                # Emit signal for point selection
+                self.view_model.point_selected.emit(x, y)
+
+                # Draw marker at selected point
+                self.mark_point(x, y)
+
+    def mark_point(self, x: float, y: float):
+        """Draw a temporary marker at the selected point"""
+        if self.current_pixmap is not None:
+            working_pixmap = self.current_pixmap.copy()
+            painter = QPainter(working_pixmap)
+
+            # Draw a crosshair or circle at the point
+            painter.setPen(QPen(QColor(255, 0, 0), 2))  # Red pen
+            size = 10
+            painter.drawLine(int(x - size), int(y), int(x + size), int(y))
+            painter.drawLine(int(x), int(y - size), int(x), int(y + size))
+
+            painter.end()
+
+            # Scale and display
+            scaled_pixmap = working_pixmap.scaled(
+                self.display_label.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            self.display_label.setPixmap(scaled_pixmap)

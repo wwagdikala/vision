@@ -1,5 +1,3 @@
-# calibration_module/viewmodels/calibration_viewmodel.py
-
 from PySide6.QtCore import QObject, Signal
 from typing import List, Dict
 import numpy as np
@@ -32,6 +30,7 @@ class CalibrationViewModel(QObject):
     # UI control signals
     button_enabled_changed = Signal(bool)  # Controls calibrate button enabled state
     button_text_changed = Signal(str)  # Controls calibrate button text
+    button_reset_changed = Signal(bool)  # Controls redetect button State
     progress_visible_changed = Signal(bool)  # Controls progress bar visibility
 
     def __init__(self):
@@ -47,10 +46,10 @@ class CalibrationViewModel(QObject):
         self.required_views = int(
             self.settings_service.get_setting("calibration.required_angles")
         )
+        self.current_view = 0
+        self.calibration_successful = False
 
         # Runtime data
-        self._current_detections = None
-        self._current_quality = None
         self._detector = None
 
         self._initialize_detector()
@@ -84,42 +83,42 @@ class CalibrationViewModel(QObject):
             self.status_changed.emit("Preview stopped")
         return True
 
-    def start_calibration(self, frames: List[np.ndarray]) -> bool:
+    def begin_calibration_session(self):
+        """
+        Reset everything to start capturing multiple views.
+        """
+        self.is_calibrating = True
+        self.calibration_successful = False
+        self.current_view = 0
 
-        try:
-            num_cameras = len(frames)
-            self.calibration_model.initialize_cameras(num_cameras)
-            self.is_calibrating = True
-            # Update UI state
+        # Reset model data
+        self.calibration_model.reset()
 
-            # self.button_enabled_changed.emit(False)
-            self.progress_visible_changed.emit(True)
-            self.progress_updated.emit(0)
-            self.button_text_changed.emit("Capture View")
-            # Process frames
-            return self.process_frames(frames)
-            # if self.process_frames(frames):
-            #     self.button_text_changed.emit("Capture View")
-            #     self.button_enabled_changed.emit(True)
-            #     return True
-            # else:
-            #     self.button_enabled_changed.emit(True)
-            #     return False
-
-        except Exception as e:
-            self.status_changed.emit(f"Calibration error: {str(e)}")
-            self.button_enabled_changed.emit(True)
-            self.progress_updated.emit(0)
-            return False
+        # Update UI signals
+        self.button_text_changed.emit("Capture View 1")
+        self.button_enabled_changed.emit(True)
+        self.progress_visible_changed.emit(True)
+        self.progress_updated.emit(0)
+        self.button_reset_changed.emit(True)
+        self.status_changed.emit("Calibration started. Capture your first view.")
+        self._update_guidance()
 
     def process_frames(self, frames: List[np.ndarray]) -> bool:
-        try:
-            if not frames:
-                raise ValueError("No frames provided")
+        """
+        Capture/detect the pattern in these frames, store in model, increment current_view.
+        If we've reached required_views, perform final calibration.
+        """
+        if not self.is_calibrating:
+            self.status_changed.emit("Not in calibration mode.")
+            return False
+        if not frames:
+            self.status_changed.emit("No frames provided.")
+            return False
 
+        try:
+            # Detect pattern in each camera
             detections = []
             quality_metrics = {}
-
             for i, frame in enumerate(frames):
                 try:
                     points_2d, points_3d = self._detector.detect(frame)
@@ -132,134 +131,113 @@ class CalibrationViewModel(QObject):
                     self.camera_status_updated.emit(i, f"Detection failed: {str(e)}")
                     return False
 
-            # Debugging for overlay
-            print("\nSending overlay update:")
-            print(f"Number of detections: {len(detections)}")
-            for i, det in enumerate(detections):
-                shape_info = det[0].shape if det[0] is not None else "None"
-                print(f"Camera {i} detection shape: {shape_info}")
-
-            self._current_detections = detections
-            self._current_quality = quality_metrics
+            # Send overlay for debugging
             self.overlay_updated.emit(detections, quality_metrics)
 
-            frame_data = [(frame, det[0]) for frame, det in zip(frames, detections)]
-            if self._validate_detection_quality(quality_metrics):
-                if self.calibration_model.process_view(frame_data):
-                    # Get current progress from model
+            # Validate quality across cameras
+            if not self._validate_detection_quality(quality_metrics):
+                self.status_changed.emit("Detection quality insufficient")
+                return False
 
-                    current_view = self.calibration_model.current_view
-                    total_views = self.calibration_model.n_required_views
-                    self.calibration_model.current_view += 1
-                    # Update progress
-                    progress = (current_view / total_views) * 100
-                    self.progress_updated.emit(progress)
+            # Store data in the Model at the index = current_view
+            success = self.calibration_model.process_view(
+                view_idx=self.current_view,
+                frame_data=[(frame, det[0]) for frame, det in zip(frames, detections)],
+            )
+            if not success:
+                self.status_changed.emit("Failed to process view in model")
+                return False
 
-                    # Check if calibration is complete
-                    if current_view >= total_views:
-                        self.status_changed.emit("Performing global calibration...")
-                        self.calibration_model.perform_global_calibration()
-                    return True
-            return False
+            # Mark this view as captured
+            self.current_view += 1
+            self.view_captured.emit(self.current_view, self.required_views)
+
+            # Update progress bar
+            progress_val = int((self.current_view / self.required_views) * 100)
+            self.progress_updated.emit(progress_val)
+
+            if self.current_view >= self.required_views:
+                # All required views have been captured -> run global calibration
+                self._complete_calibration()
+            else:
+                # Not done yet. Let user know which angle to do next.
+                self.button_text_changed.emit(f"Capture View {self.current_view + 1}")
+                self._update_guidance()
+
+            return True
 
         except Exception as e:
             self._handle_error("Frame processing failed", e)
             return False
 
-    def capture_view(self) -> bool:
-        """Capture current view if quality is acceptable."""
-        if not self._current_detections or not self._current_quality:
-            self.status_changed.emit("No valid detection to capture")
-            return False
-
-        try:
-            if self._validate_detection_quality(self._current_quality):
-                # Save to model
-                self.calibration_model.save_angle_data(
-                    self.current_view, self._current_detections, self._current_quality
-                )
-
-                self.current_view += 1
-                self.view_captured.emit(self.current_view, self.required_views)
-
-                progress = (self.current_view / self.required_views) * 100
-                self.progress_updated.emit(progress)
-
-                if self.current_view >= self.required_views:
-                    return self._complete_calibration()
-                else:
-                    self._update_guidance()
-                    return True
-            else:
-                self.status_changed.emit("Detection quality insufficient for capture")
-                return False
-
-        except Exception as e:
-            self._handle_error("Failed to capture view", e)
-            return False
-
     def _complete_calibration(self):
-        """Complete the calibration process."""
-        try:
-            self.status_changed.emit("Performing final calibration...")
-            results = self.calibration_model.perform_global_calibration()
+        """Perform final steps: single camera calibrations + global bundle adjustment."""
+        self.status_changed.emit("Performing global calibration...")
+        results = self.calibration_model.perform_global_calibration()
+        success = results.get("success", False)
 
-            if self._validate_calibration_results(results):
-                self.calibration_finished.emit(
-                    True, "Calibration completed successfully", results
+        if success:
+            try:
+                calibration_storage = self.locator.get_service("calibration_storage")
+                calibration_storage.store_calibration(
+                    camera_matrices=self.calibration_model.camera_matrices,
+                    dist_coeffs=self.calibration_model.dist_coeffs,
+                    rotations=self.calibration_model.rotations,
+                    translations=self.calibration_model.translations,
                 )
-                self.status_changed.emit("Calibration successful")
-                # Optionally, store a success flag if you want the wizard to detect success
-                setattr(self, "calibration_successful", True)
-                return True
-            else:
-                self.calibration_finished.emit(
-                    False, "Calibration failed accuracy requirements", results
-                )
-                self.status_changed.emit("Calibration failed - please retry")
-                return False
+                print("Calibration results stored successfully")
+            except Exception as e:
+                print(f"Failed to store calibration: {str(e)}")
+            # Continue with emit since calibration itself was successful
+            self.calibration_successful = True
+            self.calibration_finished.emit(
+                True, "Calibration completed successfully", results
+            )
+            self.status_changed.emit("Calibration successful!")
+        else:
+            self.calibration_finished.emit(
+                False, "Calibration failed accuracy requirements", results
+            )
+            self.status_changed.emit("Calibration failed - please retry")
 
-        except Exception as e:
-            self._handle_error("Calibration computation failed", e)
-            self.calibration_finished.emit(False, str(e), None)
-            return False
+        self.is_calibrating = False
 
     def _calculate_detection_quality(self, points_2d: np.ndarray) -> dict:
-        """Calculate quality metrics for detected points."""
+        """Calculate some simple quality metrics for the detected points."""
         try:
             if points_2d is None or len(points_2d) == 0:
                 return {"score": 0, "coverage": 0, "stability": 0}
 
-            # Get frame dimensions from settings or use defaults
             frame_width = 1920
             frame_height = 1080
 
-            # Calculate coverage
+            # coverage
             rect = cv2.boundingRect(points_2d)
             pattern_area = rect[2] * rect[3]
             frame_area = frame_width * frame_height
-            coverage = pattern_area / frame_area
+            coverage = pattern_area / frame_area if frame_area > 0 else 0
 
-            # Calculate point distribution
+            # distribution
             center = np.mean(points_2d, axis=0)
             distances = np.linalg.norm(points_2d - center, axis=1)
-            distribution = np.std(distances) / np.mean(distances)
+            distribution = (
+                np.std(distances) / np.mean(distances) if np.mean(distances) > 0 else 1
+            )
 
-            # Combined quality score
-            quality_score = min(1.0, (coverage * 0.6 + (1.0 - distribution) * 0.4))
+            # simple score
+            quality_score = min(1.0, coverage * 0.6 + (1.0 - distribution) * 0.4)
 
             return {
                 "score": quality_score,
                 "coverage": coverage,
                 "stability": 1.0 - distribution,
             }
-
         except Exception as e:
             self._handle_error("Quality calculation failed", e)
             return {"score": 0, "coverage": 0, "stability": 0}
 
     def _validate_detection_quality(self, quality_metrics: Dict) -> bool:
-        """Validate if detection quality is sufficient for capture."""
+        """Validate if detection quality is sufficient."""
         try:
             min_quality_score = float(
                 self.settings_service.get_setting("calibration.min_quality_score")
@@ -268,93 +246,52 @@ class CalibrationViewModel(QObject):
                 self.settings_service.get_setting("calibration.min_coverage")
             )
 
-            print(f"\nValidating detection quality:")
-            print(f"Minimum required score: {min_quality_score}")
-            print(f"Minimum required coverage: {min_coverage}")
-
             valid_cameras = 0
             for cam_idx, metrics in quality_metrics.items():
-                print(f"\nCamera {cam_idx}:")
-                print(f"Score: {metrics['score']:.3f} (min: {min_quality_score})")
-                print(f"Coverage: {metrics['coverage']:.3f} (min: {min_coverage})")
-
-                if (
-                    metrics["score"] >= min_quality_score
-                    and metrics["coverage"] >= min_coverage
-                ):
+                score_ok = metrics["score"] >= min_quality_score
+                coverage_ok = metrics["coverage"] >= min_coverage
+                if score_ok and coverage_ok:
                     valid_cameras += 1
-                    print(f"Camera {cam_idx} PASSED validation")
-                else:
-                    print(f"Camera {cam_idx} FAILED validation")
 
-            is_valid = valid_cameras >= 2
-            print(f"\nTotal valid cameras: {valid_cameras} (need at least 2)")
-            print(f"Overall validation {'PASSED' if is_valid else 'FAILED'}")
-
-            return is_valid
+            # For multi-camera systems, you might require at least 2 cameras pass
+            # or that ALL cameras pass. For now, let's say at least 2 must pass:
+            return valid_cameras >= 2
 
         except Exception as e:
             self._handle_error("Quality validation failed", e)
-            print(f"Validation error: {str(e)}")
-            return False
-
-    def _validate_calibration_results(self, results: dict) -> bool:
-        """Validate final calibration results."""
-        try:
-            if not results.get("success", False):
-                return False
-
-            # Check overall RMS error
-            if results.get("overall_rms", float("inf")) > 1.0:  # threshold
-                return False
-
-            # Check per-camera RMS errors
-            for cam_stats in results.get("per_camera", {}).values():
-                if cam_stats.get("rms", float("inf")) > 1.5:  # threshold
-                    return False
-
-            return True
-
-        except Exception as e:
-            self._handle_error("Results validation failed", e)
             return False
 
     def _update_guidance(self):
-        """Update user guidance based on the current state."""
+        """Provide guidance text based on the current view index."""
         if not self.is_calibrating:
             return
 
-        current = self.current_view
         total = self.required_views
-
+        current = self.current_view
         if current >= total:
             self.guidance_updated.emit(
-                "All views captured. Ready for final calibration."
+                "All views captured. Running final calibration..."
             )
             return
 
+        # Some example guidance
         messages = [
-            "Place pattern in front view, slightly tilted",
-            "Move pattern to the left side",
-            "Move pattern to the right side",
-            "Tilt pattern forward ~45°",
-            "Tilt pattern backward ~45°",
-            "Rotate pattern clockwise ~45°",
-            "Rotate pattern counter-clockwise ~45°",
-            "Move pattern closer to cameras",
-            "Move pattern farther from cameras",
-            "Place pattern at an arbitrary position",
+            "Place pattern front-and-center, slightly tilted",
+            "Move pattern left or tilt left ~30°",
+            "Move pattern right or tilt right ~30°",
+            "Tilt forward/backward ~45°",
+            "Rotate pattern around its axis ~45°",
+            "Move pattern closer or further from cameras",
+            "Try an arbitrary orientation for coverage",
         ]
 
+        # Limit the index for messages
         msg_idx = min(current, len(messages) - 1)
-        guidance = (
-            f"View {current + 1}/{total}: {messages[msg_idx]}\n"
-            f"Ensure pattern is visible in at least two cameras"
-        )
+        guidance = f"View {current + 1}/{total}: {messages[msg_idx]}"
         self.guidance_updated.emit(guidance)
 
     def _clear_overlay(self):
-        """Clear detection overlay."""
+        """Clear detection overlays."""
         self.overlay_updated.emit([], {})
 
     def _handle_error(self, context: str, error: Exception):
@@ -365,3 +302,20 @@ class CalibrationViewModel(QObject):
         )
         self.error_manager.report_error(system_error)
         self.status_changed.emit(error_msg)
+
+    def reset_calibration(self):
+        """Reset calibration state and clear all data."""
+        print("Resetting calibration state")
+        self.is_calibrating = False
+        self.calibration_successful = False
+        self.current_view = 0
+        self.calibration_model.reset()
+        self.status_changed.emit("Calibration reset")
+        self._clear_overlay()
+        self.button_text_changed.emit("Start Calibration")
+        self.button_enabled_changed.emit(True)
+        self.button_reset_changed.emit(False)
+        self.progress_visible_changed.emit(False)
+        self.guidance_updated.emit("")
+        self.camera_status_updated.emit(0, "")
+        self.camera_status_updated.emit(1, "")

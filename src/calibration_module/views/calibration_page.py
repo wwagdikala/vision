@@ -1,5 +1,3 @@
-# calibration_module/views/calibration_page.py
-
 from PySide6.QtWidgets import (
     QWizardPage,
     QVBoxLayout,
@@ -40,8 +38,6 @@ class CalibrationPage(QWizardPage):
 
         self.setup_ui()
         self.update_instructions()
-
-        # Optional: If you want to bind the extra signals
         self.setup_bindings()
 
     def _connect_viewmodel_signals(self):
@@ -100,10 +96,16 @@ class CalibrationPage(QWizardPage):
         controls_layout.addWidget(self.preview_btn)
 
         self.calibrate_btn = QPushButton("Start Calibration")
-        self.calibrate_btn.clicked.connect(self.start_calibration)
+        self.calibrate_btn.clicked.connect(self.on_calibrate_clicked)
         self.calibrate_btn.setFixedWidth(150)
         self.calibrate_btn.setEnabled(False)
         controls_layout.addWidget(self.calibrate_btn)
+
+        self.re_calibrate_btn = QPushButton("Resetart Calibration")
+        self.re_calibrate_btn.clicked.connect(self.on_re_calibrate_clicked)
+        self.re_calibrate_btn.setFixedWidth(150)
+        self.re_calibrate_btn.setEnabled(False)
+        controls_layout.addWidget(self.re_calibrate_btn)
 
         left_layout.addLayout(controls_layout)
 
@@ -165,9 +167,11 @@ class CalibrationPage(QWizardPage):
         self.calibration_viewmodel.progress_visible_changed.connect(
             self.progress_bar.setVisible
         )
+        self.calibration_viewmodel.button_reset_changed.connect(
+            self.re_calibrate_btn.setEnabled
+        )
 
     def toggle_preview(self):
-
         if not self.preview_active:
             success = True
             for i, camera_view in enumerate(self.camera_views):
@@ -181,7 +185,6 @@ class CalibrationPage(QWizardPage):
                 self.preview_active = True
                 self.preview_btn.setText("Stop Preview")
                 self.calibrate_btn.setEnabled(True)
-                # Notify the ViewModel that preview is active
                 self.calibration_viewmodel.set_preview_active(True)
             else:
                 self.status_label.setText("Failed to start all cameras")
@@ -194,10 +197,29 @@ class CalibrationPage(QWizardPage):
             self.preview_active = False
             self.preview_btn.setText("Preview All Cameras")
             self.calibrate_btn.setEnabled(False)
-            # Notify the ViewModel that preview is no longer active
             self.calibration_viewmodel.set_preview_active(False)
 
-    def start_calibration(self):
+    def on_calibrate_clicked(self):
+        """
+        Called when the user clicks "Start Calibration" / "Capture View X" / etc.
+        If not calibrating yet, begin session. Otherwise, capture the next view.
+        """
+        if not self.calibration_viewmodel.is_calibrating:
+            # Initialize and start the calibration session
+            self.calibration_viewmodel.begin_calibration_session()
+            self.capture_new_view()
+        else:
+            # We are already calibrating, so just capture the next angle
+            self.capture_new_view()
+
+    def on_re_calibrate_clicked(self):
+        if self.calibration_viewmodel.is_calibrating:
+            self.calibration_viewmodel.reset_calibration()
+
+    def capture_new_view(self):
+        """
+        Grab frames from each camera and send to the ViewModel for detection & storage.
+        """
         frames = []
         for i, camera_view in enumerate(self.camera_views):
             frame = camera_view.get_current_frame()
@@ -206,7 +228,7 @@ class CalibrationPage(QWizardPage):
                 return
             frames.append(frame)
 
-        self.calibration_viewmodel.start_calibration(frames)
+        self.calibration_viewmodel.process_frames(frames)
 
     def update_camera_status(self, camera_id: int, status: str):
         """Update status for a specific camera."""
@@ -224,13 +246,17 @@ class CalibrationPage(QWizardPage):
         """Handle successful view capture from the ViewModel."""
         self.view_progress.setText(f"Views: {current}/{total}")
         if current >= total:
-            self.calibrate_btn.setText("Complete Calibration")
+            # All views captured, button might say "Complete" or be disabled
+            self.calibrate_btn.setText("Calibrating...")
+            self.calibrate_btn.setEnabled(False)
         else:
             self.calibrate_btn.setText(f"Capture View {current + 1}")
 
     def update_guidance(self, guidance: str):
         """Update guidance message displayed to the user."""
-        self.guidance_label.setText(guidance)
+        # We might add a separate label for guidance if you like
+        # For now, let's just reuse the status_label or a new label
+        self.status_label.setText(guidance)
 
     def handle_calibration_complete(self, success: bool, message: str, results: dict):
         """Handle calibration completion signal from the ViewModel."""
@@ -245,27 +271,30 @@ class CalibrationPage(QWizardPage):
 
         # If you want the wizard to move on automatically when calibration succeeds:
         if success and self.isComplete():
-            self.wizard().next()
+            # self.wizard().next()
+            pass
 
     def _format_calibration_results(self, results: dict) -> str:
         """Format calibration results for display."""
         text = "Calibration Results:\n\n"
-
         if "overall_rms" in results:
             text += f"Overall RMS Error: {results['overall_rms']:.3f} px\n\n"
+
+        if "overall_rms_mm" in results:
+            text += (
+                f"Overall RMS Error (real-world): {results['overall_rms_mm']:.3f} mm\n"
+            )
 
         if "per_camera" in results:
             text += "Per-Camera Results:\n"
             for cam_id, stats in results["per_camera"].items():
                 text += f"\nCamera {cam_id}:\n"
                 text += f"- RMS Error: {stats['rms']:.3f} px\n"
-                text += f"- Valid Views: {stats['n_valid_views']}\n"
-
+                text += f"- Valid Views: {stats.get('n_views', 0)}\n"
         if "baseline" in results:
             text += "\nCamera Baselines:\n"
             for pair, distance in results["baseline"].items():
                 text += f"Cameras {pair}: {distance:.2f} mm\n"
-
         return text
 
     def update_status(self, status: str):
@@ -283,12 +312,18 @@ class CalibrationPage(QWizardPage):
         """
         try:
             for i, camera_view in enumerate(self.camera_views):
-                if i < len(detections):
-                    # Detections is a list of (points_2d, points_3d) tuples
-                    detection_data = (
-                        detections[i][0] if isinstance(detections[i], tuple) else None
-                    )
-                    camera_view.update_overlay(detection_data, quality.get(i, {}))
+                # Default to "no points" (empty) and empty quality
+                detection_data = None
+                detection_quality = {}
+
+                # If we actually have a detection for camera i, use it
+                if i < len(detections) and isinstance(detections[i], tuple):
+                    detection_data = detections[i][0]  # the 2D points
+                    detection_quality = quality.get(i, {})
+
+                # Always call update_overlay, so cameras with no detection get cleared
+                camera_view.update_overlay(detection_data, detection_quality)
+
         except Exception as e:
             print(f"Overlay error: {str(e)}")
             self.status_label.setText(f"Error updating overlays: {str(e)}")
@@ -320,22 +355,22 @@ class CalibrationPage(QWizardPage):
                 "2. Place the calibration cube in the working volume\n"
                 "3. Ensure the cube is visible in all cameras\n"
                 "4. Check that cube corners are well-lit and visible\n"
-                "5. Click 'Start Calibration' when ready"
+                "5. Click 'Start Calibration' when ready (and follow instructions)"
             )
         else:  # CHECKERBOARD
             instructions += (
                 "2. Hold the checkerboard in the working volume\n"
                 "3. Ensure the pattern is fully visible\n"
                 "4. Avoid reflections and ensure good lighting\n"
-                "5. Click 'Start Calibration' when ready"
+                "5. Click 'Start Calibration' when ready (and follow instructions)"
             )
 
         self.instructions_label.setText(instructions)
 
     def isComplete(self) -> bool:
         """
-        Override Qt's wizard 'isComplete' if you want the wizard to
-        proceed automatically after calibration success.
+        If you want the wizard to proceed automatically, we check
+        the calibration_viewmodel.calibration_successful flag.
         """
         return (
             hasattr(self.calibration_viewmodel, "calibration_successful")

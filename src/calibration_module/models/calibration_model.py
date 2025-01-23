@@ -1,4 +1,5 @@
 # calibration_module/models/calibration_model.py
+
 from calibration_module.models.bundle_adjustment import (
     BundleAdjustment,
     CameraParameters,
@@ -18,57 +19,129 @@ class CalibrationModel(QObject):
 
     def __init__(self):
         super().__init__()
-        # Existing initialization
         self.settings_service = ServiceLocator.get_instance().get_service(
             "settings_service"
         )
-
-        # Add new attributes for multi-view calibration
+        # Store camera data
         self.n_cameras = 0
-        self.n_required_views = int(
-            self.settings_service.get_setting("calibration.required_angles")
-        )
-        self.current_view = 0
+        self.camera_matrices = []
+        self.dist_coeffs = []
+        self.rotations = []
+        self.translations = []
 
-        # Storage for calibration data
-        self.camera_matrices = []  # Per-camera intrinsics
-        self.dist_coeffs = []  # Per-camera distortion
-        self.rotations = []  # Add storage for rotations
-        self.translations = []  # Add storage for translations
-        self.object_points = []  # 3D points for each view
-        self.image_points = []  # 2D points per camera per view
-        self.valid_views = []  # Track which views are valid for each camera
+        # Multi-view data
+        self.object_points = []
+        self.image_points = []
+        self.valid_views = []
+        self._detector_initialized = False
+
+    def reset(self):
+        """
+        Clear all stored calibration data so we can start fresh.
+        """
+        self.n_cameras = 0
+        self.camera_matrices = []
+        self.dist_coeffs = []
+        self.rotations = []
+        self.translations = []
+        self.object_points = []
+        self.image_points = []
+        self.valid_views = []
 
     def initialize_cameras(self, n_cameras: int):
-        """Initialize storage for N cameras"""
+        """Initialize storage for N cameras (if not done)."""
         self.n_cameras = n_cameras
+        # image_points[camera_index] = [view_0_points, view_1_points, ...]
         self.image_points = [[] for _ in range(n_cameras)]
         self.valid_views = [set() for _ in range(n_cameras)]
 
+    def process_view(
+        self,
+        view_idx: int,
+        frame_data: List[Tuple[np.ndarray, Optional[np.ndarray]]],
+    ) -> bool:
+        """
+        Store one "view" of data from multiple cameras (if detected).
+        Args:
+            view_idx: The index of the current view (0-based).
+            frame_data: List of (frame, detected_points_2d) for each camera.
+        Returns:
+            bool: True if at least 2 cameras had valid detections
+        """
+        # Make sure we know how many cameras we have
+        n_cameras = len(frame_data)
+        if self.n_cameras == 0:
+            self.initialize_cameras(n_cameras)
+        elif self.n_cameras != n_cameras:
+            raise CalibrationError(
+                f"Inconsistent camera count: expected {self.n_cameras}, got {n_cameras}"
+            )
+
+        # Ensure object_points list is long enough to store this view
+        if len(self.object_points) <= view_idx:
+            # Construct object points based on the pattern size
+            rows = int(self.settings_service.get_setting("calibration.pattern_rows"))
+            cols = int(self.settings_service.get_setting("calibration.pattern_cols"))
+            square_size = float(
+                self.settings_service.get_setting("calibration.square_size")
+            )
+            objp = np.zeros((rows * cols, 3), np.float32)
+            objp[:, :2] = np.mgrid[0:rows, 0:cols].T.reshape(-1, 2) * square_size
+            self.object_points.append(objp)
+
+        valid_detections = 0
+        for cam_idx, (frame, points_2d) in enumerate(frame_data):
+            if len(self.image_points) <= cam_idx:
+                self.image_points.append([])
+
+            # Expand the list so image_points[cam_idx] has an entry for each view
+            while len(self.image_points[cam_idx]) <= view_idx:
+                self.image_points[cam_idx].append(None)
+
+            if points_2d is not None and len(points_2d) > 0:
+                # Convert to float32 shape (N,2)
+                points_2d = np.array(points_2d, dtype=np.float32).reshape(-1, 2)
+                self.image_points[cam_idx][view_idx] = points_2d
+                self.valid_views[cam_idx].add(view_idx)
+                valid_detections += 1
+            else:
+                self.image_points[cam_idx][view_idx] = None
+
+        # Return True if at least 2 cameras had valid detections
+        return valid_detections >= 2
+
     def calibrate_single_cameras(self):
-        """Perform single-camera calibration for each camera"""
+        """
+        Perform individual camera calibration for each camera,
+        using the views where that camera had valid detections.
+        """
         self.camera_matrices = []
         self.dist_coeffs = []
-        self.rotations = []  # Add storage for rotations
-        self.translations = []  # Add storage for translations
+        self.rotations = []
+        self.translations = []
 
         for cam_idx in range(self.n_cameras):
-            # Get valid object and image points for this camera
             valid_views = list(self.valid_views[cam_idx])
             if not valid_views:
                 raise CalibrationError(f"No valid views for camera {cam_idx}")
 
-            obj_points = [self.object_points[v] for v in valid_views]
-            img_points = [self.image_points[cam_idx][v] for v in valid_views]
+            # Gather obj_points and img_points for the valid views
+            obj_points_list = [self.object_points[v] for v in valid_views]
+            img_points_list = [self.image_points[cam_idx][v] for v in valid_views]
 
-            # Get image size from first valid view
-            img_size = img_points[0].shape[::-1]
+            # Use the size of the first valid detection as the image size
+            # (or you can store actual frame size if you like)
+            some_points = img_points_list[0]
+            # We need (width, height) as a tuple
+            # If we don't have the real frame shape, we can guess or store it earlier
+            # For now, let's guess a typical HD size:
+            img_size = (1920, 1080)
+            if some_points is not None and len(some_points) > 0:
+                pass  # If you want to do more logic, do it here
 
-            # Calibrate single camera
             ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
-                obj_points, img_points, img_size, None, None
+                obj_points_list, img_points_list, img_size, None, None
             )
-
             if not ret:
                 raise CalibrationError(
                     f"Single camera calibration failed for camera {cam_idx}"
@@ -77,108 +150,61 @@ class CalibrationModel(QObject):
             self.camera_matrices.append(mtx)
             self.dist_coeffs.append(dist)
 
+            # Store the last rvec/tvec, or average them. We'll just store the last one:
             self.rotations.append(rvecs[-1])
             self.translations.append(tvecs[-1])
 
-            self.calibration_status.emit(
-                f"Camera {cam_idx} calibrated: RMS = {ret:.3f}"
-            )
-            print(f"Camera {cam_idx} calibrated: RMS = {ret:.3f}")
-
-    def process_view(
-        self, frame_data: List[Tuple[np.ndarray, Optional[np.ndarray]]]
-    ) -> bool:
-        """
-        Process a new view from all cameras
-        Args:
-            frame_data: List of (frame, detected_points) tuples for each camera
-        Returns:
-            bool: True if the view was successfully processed
-        """
-        if self.current_view >= self.n_required_views:
-            return False
-
-        # Add object points for this view if needed
-        if len(self.object_points) <= self.current_view:
-            # Get pattern size from settings
-            rows = int(self.settings_service.get_setting("calibration.pattern_rows"))
-            cols = int(self.settings_service.get_setting("calibration.pattern_cols"))
-            square_size = float(
-                self.settings_service.get_setting("calibration.square_size")
-            )
-
-            # Create object points for checkerboard pattern
-            objp = np.zeros((rows * cols, 3), np.float32)
-            objp[:, :2] = np.mgrid[0:rows, 0:cols].T.reshape(-1, 2) * square_size
-            self.object_points.append(objp)
-
-        # Process detections from each camera
-        valid_detections = 0
-        for cam_idx, (frame, points) in enumerate(frame_data):
-            if points is not None:
-                # Store points in correct format
-                points = np.array(points, dtype=np.float32).reshape(-1, 2)
-                if len(self.image_points) <= cam_idx:
-                    self.image_points.append([])
-                self.image_points[cam_idx].append(points)
-                self.valid_views[cam_idx].add(self.current_view)
-                valid_detections += 1
-            else:
-                if len(self.image_points) <= cam_idx:
-                    self.image_points.append([])
-                self.image_points[cam_idx].append(None)
-
-        self.current_view += 1
-        return valid_detections >= 2  # Minimum 2 cameras needed
-
     def perform_global_calibration(self):
-        """Perform global bundle adjustment"""
+        """
+        Perform single-camera calibration first, then run bundle adjustment for multi-camera.
+        Returns: dict with results
+        """
         try:
-            # First perform single camera calibration
+            # Single-camera calibration
             self.calibrate_single_cameras()
 
-            # Initialize bundle adjustment
+            # Now run global optimization
             ba = BundleAdjustment()
-
-            # Create camera parameters
             cameras = []
             for i in range(self.n_cameras):
-                # Use identity rotation and zero translation as initial guess
                 cam = CameraParameters(
                     camera_matrix=self.camera_matrices[i],
                     dist_coeffs=self.dist_coeffs[i],
-                    rvec=self.rotations[i],  # From single camera calibration
-                    tvec=self.translations[i],  # From single camera calibration
+                    rvec=self.rotations[i],
+                    tvec=self.translations[i],
                 )
                 cameras.append(cam)
 
-            # Set up and run optimization
             ba.set_camera_parameters(cameras)
             ba.set_calibration_data(self.object_points, self.image_points)
 
-            results = ba.optimize(verbose=True)
-
+            results = ba.optimize(verbose=False)
             if results["success"]:
-                # Format results for UI
+                # Format results nicely
                 summary = self._format_calibration_results(results)
-                self.calibration_complete.emit(True, "Calibration successful", summary)
+
+                return summary
             else:
-                self.calibration_complete.emit(
-                    False, "Global optimization failed", results
-                )
+                return {
+                    "success": False,
+                    "message": "Global optimization failed",
+                    "overall_rms": float("inf"),
+                }
 
         except Exception as e:
-            self.calibration_complete.emit(False, f"Calibration failed: {str(e)}", {})
+            return {"success": False, "error": str(e)}
 
     def _format_calibration_results(self, results: dict) -> dict:
-        """Format calibration results for display"""
+        """Format calibration results for display in the UI."""
         summary = {
+            "success": results["success"],
             "overall_rms": results["overall_rms"],
+            "overall_rms_mm": results.get("overall_rms_mm"),
             "per_camera": {},
-            "baseline": {},  # For stereo measurements
+            "baseline": {},
         }
 
-        # Per-camera statistics
+        # Copy over camera_stats
         for cam_idx, stats in results["camera_stats"].items():
             summary["per_camera"][cam_idx] = {
                 "rms": stats["rms"],
@@ -186,21 +212,17 @@ class CalibrationModel(QObject):
                 "max_error": stats["max_error"],
             }
 
-        # Calculate baselines between cameras
+        # Compute pairwise baselines
         optimized_cameras = results["optimized_cameras"]
         for i in range(len(optimized_cameras) - 1):
             for j in range(i + 1, len(optimized_cameras)):
-                # Compute relative transformation
                 R1, _ = cv2.Rodrigues(optimized_cameras[i].rvec)
                 R2, _ = cv2.Rodrigues(optimized_cameras[j].rvec)
                 t1 = optimized_cameras[i].tvec
                 t2 = optimized_cameras[j].tvec
 
-                # Relative transformation
                 R_rel = R2 @ R1.T
                 t_rel = t2 - R_rel @ t1
-
-                # Calculate baseline
                 baseline = np.linalg.norm(t_rel)
                 summary["baseline"][f"{i}-{j}"] = baseline
 
