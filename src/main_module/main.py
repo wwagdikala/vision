@@ -9,6 +9,7 @@ from services.service_locator import ServiceLocator
 from services.settings_service import SettingsService
 from services.navigation_service import NavigationService
 from services.navigation_service import ViewType
+from services.global_state_service import GlobalStateService
 from calibration_module.main import CalibrationModule
 
 from main_module.viewmodels.main_viewmodel import MainViewViewModel
@@ -22,8 +23,8 @@ from calibration_module.views.wizard_view import CalibrationWizard
 from calibration_module.models.wizard_model import WizardModel
 from core.error_handling.error_manager import ErrorManager
 from services.calibration_service import CalibrationStorage
-from main_module.viewmodels.measurement_viewmodel import MeasurementViewModel
-from main_module.views.measurement_view import MeasurementView
+from measurment_module.viewmodels.measurement_viewmodel import MeasurementViewModel
+from measurment_module.views.measurement_view import MeasurementView
 
 
 def initialize(locator):
@@ -64,6 +65,7 @@ def initialize(locator):
 if __name__ == "__main__":
     app = QApplication([])
     locator = ServiceLocator.get_instance()
+    locator.register_service("global_state", GlobalStateService())
     locator.register_service("navigation_service", NavigationService())
     window = MainWindow()
     initialize(locator)

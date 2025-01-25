@@ -41,6 +41,10 @@ class SettingsService(QObject):
         value = self._settings.get("cameras", {}).get(key)
         if value is not None:
             return value
+
+        value = self._settings.get("app", {}).get(key)
+        if value is not None:
+            return value
         # Finally try in root (though we shouldn't have any here)
         return self._settings.get(key)
 

@@ -42,6 +42,10 @@ class MainView(QWidget):
             lambda: self.view_model.navigate_to(ViewType.MEASUREMENT)
         )
 
+        self.view_model.get_global_state().wizard_active_state_changed.connect(
+            self.change_view_block
+        )
+
     def change_view_block(self, is_active: bool):
         for element in self.findChildren(QWidget):
             element.setEnabled(not is_active)

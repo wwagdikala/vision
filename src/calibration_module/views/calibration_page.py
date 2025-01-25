@@ -65,6 +65,7 @@ class CalibrationPage(QWizardPage):
         camera_layout = QGridLayout()
 
         self.camera_views = []
+
         self.camera_status_labels = []
         num_cameras = CameraSetup.get_num_cameras(self.camera_setup)
 
@@ -258,22 +259,6 @@ class CalibrationPage(QWizardPage):
         # For now, let's just reuse the status_label or a new label
         self.status_label.setText(guidance)
 
-    def handle_calibration_complete(self, success: bool, message: str, results: dict):
-        """Handle calibration completion signal from the ViewModel."""
-        self.status_label.setText(message)
-        self.calibrate_btn.setEnabled(True)
-        self.progress_bar.setVisible(False)
-
-        if success and results:
-            results_text = self._format_calibration_results(results)
-            self.results_label.setText(results_text)
-            self.results_label.setVisible(True)
-
-        # If you want the wizard to move on automatically when calibration succeeds:
-        if success and self.isComplete():
-            # self.wizard().next()
-            pass
-
     def _format_calibration_results(self, results: dict) -> str:
         """Format calibration results for display."""
         text = "Calibration Results:\n\n"
@@ -306,10 +291,6 @@ class CalibrationPage(QWizardPage):
         self.progress_bar.setValue(value)
 
     def _update_camera_overlays(self, detections, quality):
-        """
-        Update camera views with detection overlays.
-        The data is passed from the ViewModel (points, metrics).
-        """
         try:
             for i, camera_view in enumerate(self.camera_views):
                 # Default to "no points" (empty) and empty quality
@@ -329,7 +310,6 @@ class CalibrationPage(QWizardPage):
             self.status_label.setText(f"Error updating overlays: {str(e)}")
 
     def create_camera_view(self, camera_id):
-        """Create a camera view widget."""
         camera_view = CameraView(
             self.locator.get_service(f"camera_viewmodel_{camera_id}")
         )
@@ -368,11 +348,22 @@ class CalibrationPage(QWizardPage):
         self.instructions_label.setText(instructions)
 
     def isComplete(self) -> bool:
-        """
-        If you want the wizard to proceed automatically, we check
-        the calibration_viewmodel.calibration_successful flag.
-        """
         return (
             hasattr(self.calibration_viewmodel, "calibration_successful")
             and self.calibration_viewmodel.calibration_successful
         )
+
+    def handle_calibration_complete(self, success: bool, message: str, results: dict):
+        """Handle calibration completion signal from the ViewModel."""
+        self.status_label.setText(message)
+        self.calibrate_btn.setEnabled(True)
+        self.progress_bar.setVisible(False)
+
+        if success and results:
+            results_text = self._format_calibration_results(results)
+            self.results_label.setText(results_text)
+            self.results_label.setVisible(True)
+
+        # If you want the wizard to move on automatically when calibration succeeds:
+        if success and self.isComplete():
+            self.completeChanged.emit()

@@ -104,10 +104,6 @@ class CalibrationViewModel(QObject):
         self._update_guidance()
 
     def process_frames(self, frames: List[np.ndarray]) -> bool:
-        """
-        Capture/detect the pattern in these frames, store in model, increment current_view.
-        If we've reached required_views, perform final calibration.
-        """
         if not self.is_calibrating:
             self.status_changed.emit("Not in calibration mode.")
             return False

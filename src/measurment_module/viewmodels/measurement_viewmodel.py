@@ -15,6 +15,8 @@ class MeasurementViewModel(QObject):
         self.locator = ServiceLocator.get_instance()
         self.calibration_storage = self.locator.get_service("calibration_storage")
         self.settings_service = self.locator.get_service("settings_service")
+        self.debug_mode = self.settings_service.get_setting("app.debug_mode")
+        self.global_state = self.locator.get_service("global_state")
         self.camera_viewmodels = []
 
         # Get camera viewmodels
@@ -40,9 +42,11 @@ class MeasurementViewModel(QObject):
         self.point1_data = []
         self.point2_data = []
         self.current_point = 1
-        # Freeze all camera frames
-        for vm in self.camera_viewmodels:
-            vm.freeze_frame()
+
+        # Work with viewmodels instead of views
+        for viewmodel in self.camera_viewmodels:
+            viewmodel.freeze_frame()
+            viewmodel.clear_markers()  # We'll need to add this method to the camera viewmodel
         self.status_changed.emit("Select point 1 in first camera view")
 
     def stop_measuring(self):
@@ -50,42 +54,12 @@ class MeasurementViewModel(QObject):
         self.measuring_active = False
         self.point1_data = []
         self.point2_data = []
-        # Unfreeze all camera frames
-        for vm in self.camera_viewmodels:
-            vm.unfreeze_frame()
+
+        # Work with viewmodels instead of views
+        for viewmodel in self.camera_viewmodels:
+            viewmodel.clear_markers()  # We'll need to add this method to the camera viewmodel
+            viewmodel.unfreeze_frame()
         self.status_changed.emit("Measurement stopped")
-
-    def handle_point_selection(self, camera_idx: int, x: float, y: float):
-        """Handle point selection from cameras"""
-        if not self.measuring_active:
-            return
-
-        print(f"Point selected: Camera {camera_idx}, x={x}, y={y}")  # Debug print
-
-        # Check if this camera has already been used for current point
-        current_points = (
-            self.point1_data if self.current_point == 1 else self.point2_data
-        )
-        if any(cam_idx == camera_idx for cam_idx, _, _ in current_points):
-            self.status_changed.emit(
-                f"Point {self.current_point} already selected in this camera"
-            )
-            return
-
-        # Add point
-        if self.current_point == 1:
-            self.point1_data.append((camera_idx, x, y))
-            if len(self.point1_data) == 1:
-                self.status_changed.emit("Select point 1 in second camera view")
-            elif len(self.point1_data) == 2:
-                self.current_point = 2
-                self.status_changed.emit("Select point 2 in first camera view")
-        else:  # current_point == 2
-            self.point2_data.append((camera_idx, x, y))
-            if len(self.point2_data) == 1:
-                self.status_changed.emit("Select point 2 in second camera view")
-            elif len(self.point2_data) == 2:
-                self._compute_3d_distance()
 
     def _compute_3d_distance(self):
         """Compute 3D distance between selected points"""
@@ -147,10 +121,13 @@ class MeasurementViewModel(QObject):
         return CameraSetup.get_num_cameras(setup)
 
     def start_preview(self):
-        """Start camera preview"""
+
         if not self.calibration_storage.is_calibrated():
-            self.status_changed.emit("System not calibrated")
-            return False
+            if not self.debug_mode:
+                self.status_changed.emit("System not calibrated")
+                return False
+            else:
+                self.status_changed.emit("Debug mode: System not calibrated")
 
         try:
             # Initialize camera views
@@ -183,3 +160,48 @@ class MeasurementViewModel(QObject):
 
         except Exception as e:
             self.status_changed.emit(f"Error stopping preview: {str(e)}")
+
+    def handle_point_selection(self, camera_idx: int, x: float, y: float):
+        """Handle point selection from cameras"""
+        if not self.measuring_active:
+            return
+
+        # Check if we've already used this camera for the current point
+        current_points = (
+            self.point1_data if self.current_point == 1 else self.point2_data
+        )
+        if any(cam_idx == camera_idx for cam_idx, _, _ in current_points):
+            self.status_changed.emit(
+                f"Point {self.current_point} already selected in this camera"
+            )
+            return
+
+        # Check if we've reached our point limit
+        if len(self.point1_data) == 2 and len(self.point2_data) == 2:
+            self.status_changed.emit("All points have been selected")
+            return
+
+        # Store the point data
+        if self.current_point == 1:
+            if len(self.point1_data) < 2:  # Only allow 2 points for point 1
+                self.point1_data.append((camera_idx, x, y))
+                # Mark point in the appropriate camera viewmodel
+                self.camera_viewmodels[camera_idx].mark_point(
+                    x, y
+                )  # Changed from camera_views to camera_viewmodels
+                if len(self.point1_data) == 1:
+                    self.status_changed.emit("Select point 1 in second camera view")
+                elif len(self.point1_data) == 2:
+                    self.current_point = 2
+                    self.status_changed.emit("Select point 2 in first camera view")
+        else:  # current_point == 2
+            if len(self.point2_data) < 2:  # Only allow 2 points for point 2
+                self.point2_data.append((camera_idx, x, y))
+                # Mark point in the appropriate camera viewmodel
+                self.camera_viewmodels[camera_idx].mark_point(
+                    x, y
+                )  # Changed from camera_views to camera_viewmodels
+                if len(self.point2_data) == 1:
+                    self.status_changed.emit("Select point 2 in second camera view")
+                elif len(self.point2_data) == 2:
+                    self._compute_3d_distance()

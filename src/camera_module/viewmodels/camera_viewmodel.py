@@ -1,14 +1,16 @@
 # src/viewmodels/camera_viewmodel.py
-from PySide6.QtCore import QObject, Signal, QTimer
+from PySide6.QtCore import QObject, Signal, QTimer, Property
 from services.service_locator import ServiceLocator
 
 
 class CameraViewModel(QObject):
 
-    frame_ready = Signal(object)  # Will emit processed frame for UI
+    frame_ready = Signal(object)
     status_changed = Signal(str)
     error_occurred = Signal(str)
+    preview_status_changed = Signal(bool)
     point_selected = Signal(float, float)
+    marker_updated = Signal(list)
 
     def __init__(self, camera_model):
         super().__init__()
@@ -16,9 +18,10 @@ class CameraViewModel(QObject):
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
 
+        self.markers = []
         self.frozen_frame = None  # Add this to store frozen frame
         self.is_frozen = False  # Add freeze state
-        # Connect model signals
+
         self.camera_model.status_changed.connect(self.status_changed)
         self.camera_model.error_occurred.connect(self.error_occurred)
 
@@ -56,3 +59,27 @@ class CameraViewModel(QObject):
         self.is_frozen = False
         self.frozen_frame = None
         self.timer.start(30)
+
+    def mark_point(self, x: float, y: float):
+        """Store a new marker point and notify view"""
+        self.markers.append((x, y))
+        # Emit updated markers list to view
+        self.marker_updated.emit(self.markers)
+
+    def clear_markers(self):
+        """Clear all stored markers"""
+        self.markers = []
+        # Emit empty list to clear view
+        self.marker_updated.emit(self.markers)
+
+    @Property(bool, notify=preview_status_changed)
+    def preview_active(self):
+        return self.timer.isActive()
+
+    @preview_active.setter
+    def preview_active(self, value):
+        if value:
+            self.start_camera()
+        else:
+            self.stop_camera()
+        self.preview_status_changed.emit(value)

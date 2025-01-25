@@ -100,7 +100,7 @@ class MeasurementView(QWidget):  # Fixed class name spelling
 
     def create_camera_view(self, camera_id):
         view = CameraView(self.locator.get_service(f"camera_viewmodel_{camera_id}"))
-        view.setMinimumSize(320, 240)
+        view.setMinimumSize(640, 480)
         return view
 
     def connect_signals(self):

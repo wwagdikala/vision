@@ -1,14 +1,20 @@
 {
   "calibration": {
     "target_type": "checkerboard",
-    "square_size": 10,
+    "square_size": 25,
     "required_angles": 5,
     "min_quality_score": "0.1",
     "min_coverage": 0.05,
-    "pattern_rows": 9,
+    "pattern_rows": 6,
     "pattern_cols": 9
   },
   "cameras": {
-    "camera_setup": "stereo_2"
+    "camera_setup": "stereo_2",
+    "image_display_mode": "fit"
+  },
+  "app": {
+    "window_width": 1280,
+    "window_height": 720,
+    "debug_mode": true
   }
 }
