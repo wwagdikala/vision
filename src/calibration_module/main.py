@@ -14,6 +14,10 @@ from calibration_module.models.wizard_model import WizardModel
 from calibration_module.viewmodels.calibration_viewmodel import CalibrationViewModel
 from calibration_module.views.calibration_page import CalibrationPage
 from calibration_module.models.calibration_model import CalibrationModel
+from calibration_module.views.communication_page import CommunicationSetupPage
+from calibration_module.viewmodels.communication_viewmodel import (
+    CommunicationSetupViewModel,
+)
 
 
 class CalibrationModule:
@@ -30,17 +34,16 @@ class CalibrationModule:
         locator.register_service("wizard_model", wizard_model)
         locator.register_service("calibration_model", calibration_model)
 
-        wizard_viewmodel = WizardViewModel()
-        calibration_viewmodel = CalibrationViewModel()
-        welcome_viewmodel = WelcomeViewModel()
-        locator.register_service("wizard_viewmodel", wizard_viewmodel)
-        locator.register_service("welcome_viewmodel", welcome_viewmodel)
-        locator.register_service("calibration_viewmodel", calibration_viewmodel)
+        locator.register_service("wizard_viewmodel", WizardViewModel())
+        locator.register_service("welcome_viewmodel", WelcomeViewModel())
+        locator.register_service(
+            "communication_viewmodel", CommunicationSetupViewModel()
+        )
+        locator.register_service("calibration_viewmodel", CalibrationViewModel())
 
-        welcome_page = WelcomePage()
-        calibration_page = CalibrationPage()
-        locator.register_service("welcome_page", welcome_page)
-        locator.register_service("calibration_page", calibration_page)
+        locator.register_service("welcome_page", WelcomePage())
+        locator.register_service("communication_view", CommunicationSetupPage())
+        locator.register_service("calibration_page", CalibrationPage())
 
         return CalibrationWizard()
 

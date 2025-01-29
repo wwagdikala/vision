@@ -2,6 +2,7 @@ from PySide6.QtWidgets import QWizard
 from services.service_locator import ServiceLocator
 from calibration_module.views.calibration_page import CalibrationPage
 from calibration_module.views.welcome_page import WelcomePage
+from calibration_module.views.communication_page import CommunicationSetupPage
 
 
 class CalibrationWizard(QWizard):
@@ -19,6 +20,7 @@ class CalibrationWizard(QWizard):
 
     def setup_ui(self):
         self.addPage(WelcomePage())
+        self.addPage(CommunicationSetupPage())  # Add new page
         self.addPage(CalibrationPage())
 
     def connect_signals(self):

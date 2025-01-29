@@ -23,8 +23,8 @@ from calibration_module.views.wizard_view import CalibrationWizard
 from calibration_module.models.wizard_model import WizardModel
 from core.error_handling.error_manager import ErrorManager
 from services.calibration_service import CalibrationStorage
-from measurment_module.viewmodels.measurement_viewmodel import MeasurementViewModel
-from measurment_module.views.measurement_view import MeasurementView
+from measurement_module.viewmodels.measurement_viewmodel import MeasurementViewModel
+from measurement_module.views.measurement_view import MeasurementView
 
 
 def initialize(locator):

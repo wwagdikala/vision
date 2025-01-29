@@ -8,8 +8,10 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QDoubleSpinBox,
     QPushButton,
+    QLineEdit,
 )
 from services.service_locator import ServiceLocator
+from components.ip_field import IPInputWidget
 
 
 class SettingsView(QWidget):
@@ -62,6 +64,16 @@ class SettingsView(QWidget):
         self.coverage_spin.setSingleStep(0.05)
         self.coverage_spin.setValue(float(self.viewmodel.get_setting("min_coverage")))
         form_layout.addRow("Min Coverage:", self.coverage_spin)
+
+        communication_group = QGroupBox("Communication Settings")
+        comm_layout = QFormLayout()
+
+        self.carto_ip_input = IPInputWidget()
+        self.carto_ip_input.set_ip(self.viewmodel.get_setting("app.carto_ip"))
+        comm_layout.addRow("CARTO IP Address:", self.carto_ip_input)
+
+        communication_group.setLayout(comm_layout)
+        layout.addWidget(communication_group)
 
         settings_group.setLayout(form_layout)
         layout.addWidget(settings_group)

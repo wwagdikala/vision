@@ -7,13 +7,15 @@ from PySide6.QtWidgets import (
     QPushButton,
     QLabel,
     QGroupBox,
+    QTabWidget,
 )
 from PySide6.QtCore import Qt
 from services.service_locator import ServiceLocator
 from camera_module.views.camera_view import CameraView
+from measurement_module.views.visualization_view import VisualizationView
 
 
-class MeasurementView(QWidget):  # Fixed class name spelling
+class MeasurementView(QWidget):
     def __init__(self):
         super().__init__()
         self.locator = ServiceLocator.get_instance()
@@ -25,7 +27,26 @@ class MeasurementView(QWidget):  # Fixed class name spelling
         self.connect_signals()
 
     def setup_ui(self):
-        layout = QHBoxLayout()
+        main_layout = QVBoxLayout(self)
+
+        # Create tab widget
+        self.tab_widget = QTabWidget()
+
+        # Create and add manual measurement tab
+        self.manual_tab = QWidget()
+        self.setup_manual_tab()
+        self.tab_widget.addTab(self.manual_tab, "Manual Measurement")
+
+        # Create and add 3D visualization tab
+        self.visual_tab = QWidget()
+        self.setup_visual_tab()
+        self.tab_widget.addTab(self.visual_tab, "3D Visualization")
+
+        main_layout.addWidget(self.tab_widget)
+
+    def setup_manual_tab(self):
+        """Set up the manual measurement tab - keeping existing functionality"""
+        layout = QHBoxLayout(self.manual_tab)
 
         # Left panel with cameras
         left_panel = QWidget()
@@ -76,7 +97,7 @@ class MeasurementView(QWidget):  # Fixed class name spelling
         # Status
         status_group = QGroupBox("Status")
         status_layout = QVBoxLayout()
-        self.status_label = QLabel("Ready to start")  # Add status label
+        self.status_label = QLabel("Ready to start")
         self.status_label.setWordWrap(True)
         status_layout.addWidget(self.status_label)
         status_group.setLayout(status_layout)
@@ -93,10 +114,28 @@ class MeasurementView(QWidget):  # Fixed class name spelling
 
         right_layout.addStretch()
 
-        # Add panels to main layout
+        # Add panels to layout
         layout.addWidget(left_panel)
         layout.addWidget(right_panel)
-        self.setLayout(layout)
+
+    def setup_visual_tab(self):
+        """Set up the 3D visualization tab"""
+        layout = QVBoxLayout(self.visual_tab)
+
+        # Create Open3D widget
+        self.vis_view = VisualizationView()
+        layout.addWidget(self.vis_view)
+
+        # Add controls below the 3D view
+        controls_layout = QHBoxLayout()
+
+        # Future controls will go here
+        # For now, just add a placeholder status label
+        self.visual_status_label = QLabel("3D visualization ready")
+        controls_layout.addWidget(self.visual_status_label)
+        controls_layout.addStretch()
+
+        layout.addLayout(controls_layout)
 
     def create_camera_view(self, camera_id):
         view = CameraView(self.locator.get_service(f"camera_viewmodel_{camera_id}"))
