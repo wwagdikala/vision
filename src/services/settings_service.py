@@ -10,8 +10,7 @@ class SettingsService(QObject):
         super().__init__()
         current_dir = Path(__file__).resolve().parent.parent / "config"
         self._settings_file = current_dir / "settings.json"
-        print(f"Settings file: {self._settings_file}")
-
+        
         self._default_settings = {
             "calibration": {
                 "target_type": "checkerboard",
@@ -24,16 +23,14 @@ class SettingsService(QObject):
             },
             "cameras": {"camera_setup": "stereo_2"},
         }
+
         self._settings = self._default_settings.copy()
         self.load_settings()
 
-    # In settings_service.py
     def get_setting(self, key: str) -> str:
         if "." in key:
             section, setting = key.split(".")
             return self._settings.get(section, {}).get(setting)
-        # For backward compatibility with existing code
-        # First try in calibration section
         value = self._settings.get("calibration", {}).get(key)
         if value is not None:
             return value

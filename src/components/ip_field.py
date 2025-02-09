@@ -66,6 +66,8 @@ class IPInputWidget(QtWidgets.QWidget):
 
     def set_ip(self, ip):
         print(ip)
+        if ip == None:
+            return
         parts = ip.split(".")
         for edit, part in zip(self.segments, parts):
             edit.setText(part)

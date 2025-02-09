@@ -36,9 +36,6 @@ class CalibrationModel(QObject):
         self._detector_initialized = False
 
     def reset(self):
-        """
-        Clear all stored calibration data so we can start fresh.
-        """
         self.n_cameras = 0
         self.camera_matrices = []
         self.dist_coeffs = []
@@ -49,7 +46,6 @@ class CalibrationModel(QObject):
         self.valid_views = []
 
     def initialize_cameras(self, n_cameras: int):
-        """Initialize storage for N cameras (if not done)."""
         self.n_cameras = n_cameras
         # image_points[camera_index] = [view_0_points, view_1_points, ...]
         self.image_points = [[] for _ in range(n_cameras)]
@@ -60,14 +56,7 @@ class CalibrationModel(QObject):
         view_idx: int,
         frame_data: List[Tuple[np.ndarray, Optional[np.ndarray]]],
     ) -> bool:
-        """
-        Store one "view" of data from multiple cameras (if detected).
-        Args:
-            view_idx: The index of the current view (0-based).
-            frame_data: List of (frame, detected_points_2d) for each camera.
-        Returns:
-            bool: True if at least 2 cameras had valid detections
-        """
+
         # Make sure we know how many cameras we have
         n_cameras = len(frame_data)
         if self.n_cameras == 0:
@@ -111,10 +100,6 @@ class CalibrationModel(QObject):
         return valid_detections >= 2
 
     def calibrate_single_cameras(self):
-        """
-        Perform individual camera calibration for each camera,
-        using the views where that camera had valid detections.
-        """
         self.camera_matrices = []
         self.dist_coeffs = []
         self.rotations = []
@@ -155,10 +140,6 @@ class CalibrationModel(QObject):
             self.translations.append(tvecs[-1])
 
     def perform_global_calibration(self):
-        """
-        Perform single-camera calibration first, then run bundle adjustment for multi-camera.
-        Returns: dict with results
-        """
         try:
             # Single-camera calibration
             self.calibrate_single_cameras()

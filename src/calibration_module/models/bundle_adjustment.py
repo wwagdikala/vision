@@ -9,8 +9,6 @@ import cv2
 
 @dataclass
 class CameraParameters:
-    """Container for camera parameters"""
-
     camera_matrix: np.ndarray  # 3x3 intrinsic matrix
     dist_coeffs: np.ndarray  # Distortion coefficients
     rvec: np.ndarray  # Rotation vector (Rodrigues)

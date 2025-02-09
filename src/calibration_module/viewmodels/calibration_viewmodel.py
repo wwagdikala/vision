@@ -10,6 +10,7 @@ from core.error_handling.exceptions import (
 )
 from services.service_locator import ServiceLocator
 from core.constants.settings_constants import CalibrationTarget
+from core.error_handling.error_manager import SystemError
 from calibration_module.models.calibration_detector import CalibrationDetector
 
 
@@ -40,7 +41,6 @@ class CalibrationViewModel(QObject):
         self.calibration_model = self.locator.get_service("calibration_model")
         self.error_manager = self.locator.get_service("error_manager")
 
-        # State management
         self.is_calibrating = False
         self.preview_active = False
         self.required_views = int(
@@ -49,13 +49,11 @@ class CalibrationViewModel(QObject):
         self.current_view = 0
         self.calibration_successful = False
 
-        # Runtime data
         self._detector = None
 
         self._initialize_detector()
 
     def _initialize_detector(self):
-        """Initialize pattern detector based on settings."""
         try:
             target_type = self.settings_service.get_setting("calibration.target_type")
             self._detector = CalibrationDetector(target_type)
@@ -69,10 +67,7 @@ class CalibrationViewModel(QObject):
             )
 
     def set_preview_active(self, active: bool) -> bool:
-        """
-        Enable or disable preview mode.
-        The view should handle actually turning on/off camera feeds.
-        """
+
         self.preview_active = active
         self.preview_state_changed.emit(active)
 
@@ -84,17 +79,12 @@ class CalibrationViewModel(QObject):
         return True
 
     def begin_calibration_session(self):
-        """
-        Reset everything to start capturing multiple views.
-        """
         self.is_calibrating = True
         self.calibration_successful = False
         self.current_view = 0
 
-        # Reset model data
         self.calibration_model.reset()
 
-        # Update UI signals
         self.button_text_changed.emit("Capture View 1")
         self.button_enabled_changed.emit(True)
         self.progress_visible_changed.emit(True)

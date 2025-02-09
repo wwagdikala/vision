@@ -24,6 +24,7 @@ class CalibrationSettings(Enum):
 class CalibrationTarget(Enum):
     CUBE = "cube"
     CHECKERBOARD = "checkerboard"
+    CIRCLE_CUBE = "circle_cube"
 
     @classmethod
     def list(cls) -> list:
