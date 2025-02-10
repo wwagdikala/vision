@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional, Dict, Tuple
 from services.service_locator import ServiceLocator
+from services.calibration_service import CalibrationStorage
 
 
 @dataclass
@@ -44,9 +45,6 @@ class MeasurementModel(QObject):
 
     def __init__(self):
         super().__init__()
-        self.calibration_storage = ServiceLocator.get_instance().get_service(
-            "calibration_storage"
-        )
 
         # Storage for ongoing measurements
         self.current_measurements: Dict[int, MeasurementResult] = (

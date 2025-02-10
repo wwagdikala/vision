@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QHBoxLayout
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QHBoxLayout, QMessageBox
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
 from services.service_locator import ServiceLocator

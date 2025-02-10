@@ -8,24 +8,20 @@ from measurement_module.models.measurement_model import MeasurementModel
 
 
 class MeasurementViewModel(QObject):
-    # Keep existing signals exactly as they are for View compatibility
     measurement_updated = Signal(float)
     status_changed = Signal(str)
 
     def __init__(self):
         super().__init__()
-        # Keep existing service initialization
+        print("MeasurementViewModel init")
         self.locator = ServiceLocator.get_instance()
         self.calibration_storage = self.locator.get_service("calibration_storage")
-        print(self.calibration_storage)
         self.settings_service = self.locator.get_service("settings_service")
         self.debug_mode = self.settings_service.get_setting("app.debug_mode")
         self.global_state = self.locator.get_service("global_state")
 
-        # Initialize measurement model
         self.measurement_model = MeasurementModel()
 
-        # Connect model signals
         self.measurement_model.measurement_updated.connect(
             self._handle_measurement_update
         )
@@ -36,7 +32,6 @@ class MeasurementViewModel(QObject):
             lambda msg: self.status_changed.emit(f"Triangulation failed: {msg}")
         )
 
-        # Keep existing camera viewmodel initialization
         self.camera_viewmodels = []
         num_cameras = self.get_camera_count()
         for i in range(num_cameras):
@@ -46,7 +41,6 @@ class MeasurementViewModel(QObject):
                 lambda x, y, cam_idx=i: self.handle_point_selection(cam_idx, x, y)
             )
 
-        # State management - keep all existing state variables
         self.preview_active = False
         self.measuring_active = False
         self.point1_data = []
@@ -54,13 +48,11 @@ class MeasurementViewModel(QObject):
         self.current_point = 1
 
     def start_measuring(self):
-        """Start measurement mode - required by the View"""
         self.measuring_active = True
         self.point1_data = []
         self.point2_data = []
         self.current_point = 1
 
-        # Freeze camera frames for measurement
         for viewmodel in self.camera_viewmodels:
             viewmodel.freeze_frame()
             viewmodel.clear_markers()

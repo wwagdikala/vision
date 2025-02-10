@@ -8,11 +8,15 @@ from PySide6.QtWidgets import (
     QLabel,
     QGroupBox,
     QTabWidget,
+    QMessageBox,
 )
-from PySide6.QtCore import Qt
+
+from PySide6.QtCore import Qt, QTimer
 from services.service_locator import ServiceLocator
 from camera_module.views.camera_view import CameraView
 from measurement_module.views.visualization_view import VisualizationView
+import os
+
 
 
 class MeasurementView(QWidget):
@@ -20,8 +24,9 @@ class MeasurementView(QWidget):
         super().__init__()
         self.locator = ServiceLocator.get_instance()
         self.viewmodel = self.locator.get_service("measurement_viewmodel")
-        self.preview_active = False  # Add state tracking
-        self.measuring_active = False  # Add state tracking
+        self.preview_active = False
+        self.measuring_active = False 
+        calibration_storage = self.locator.get_service("calibration_storage")
 
         self.setup_ui()
         self.connect_signals()
@@ -119,22 +124,22 @@ class MeasurementView(QWidget):
         layout.addWidget(right_panel)
 
     def setup_visual_tab(self):
-        """Set up the 3D visualization tab"""
         layout = QVBoxLayout(self.visual_tab)
-
-        # Create Open3D widget
+    
         self.vis_view = VisualizationView()
         layout.addWidget(self.vis_view)
-
-        # Add controls below the 3D view
+    
         controls_layout = QHBoxLayout()
-
-        # Future controls will go here
-        # For now, just add a placeholder status label
+    
+        self.capture_btn = QPushButton("Start Capture")
+        self.capture_btn.clicked.connect(self.toggle_point_cloud_capture)
+        controls_layout.addWidget(self.capture_btn)
+    
+        # Status label
         self.visual_status_label = QLabel("3D visualization ready")
         controls_layout.addWidget(self.visual_status_label)
         controls_layout.addStretch()
-
+    
         layout.addLayout(controls_layout)
 
     def create_camera_view(self, camera_id):
@@ -186,3 +191,52 @@ class MeasurementView(QWidget):
 
     def update_status(self, status: str):  # Add the missing method
         self.status_label.setText(status)
+
+    def toggle_point_cloud_capture(self):
+        if self.capture_btn.text() == "Start Capture":
+            self.start_point_cloud_capture()
+        else:
+            self.stop_point_cloud_capture()
+
+    def start_point_cloud_capture(self):
+        # Start cameras if not already running
+        if not self.preview_active:
+            if not self.viewmodel.start_preview():
+                self.visual_status_label.setText("Failed to start cameras")
+                return
+            self.preview_active = True
+    
+        # Start capture timer for periodic updates
+        self.point_cloud_timer = QTimer()
+        self.point_cloud_timer.timeout.connect(self.update_point_cloud)
+        self.point_cloud_timer.start(100)  # Update every 100ms
+    
+        self.capture_btn.setText("Stop Capture")
+        self.visual_status_label.setText("Capturing point cloud...")
+    
+    def stop_point_cloud_capture(self):
+        if hasattr(self, 'point_cloud_timer'):
+            self.point_cloud_timer.stop()
+        
+        # Clear the point cloud
+        self.vis_view.clear_point_cloud()
+        
+        self.capture_btn.setText("Start Capture")
+        self.visual_status_label.setText("Capture stopped")
+    
+    def update_point_cloud(self):
+        try:
+            # Get current frames from all cameras
+            frames = []
+            for camera_view in self.camera_views:
+                frame = camera_view.get_current_frame()
+                if frame is None:
+                    self.visual_status_label.setText("Failed to get camera frame")
+                    return
+                frames.append(frame)
+            
+            # Update the visualization
+            self.vis_view.update_point_cloud(frames)
+            
+        except Exception as e:
+            self.visual_status_label.setText(f"Error updating point cloud: {str(e)}")

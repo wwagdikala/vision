@@ -201,10 +201,6 @@ class CalibrationPage(QWizardPage):
             self.calibration_viewmodel.set_preview_active(False)
 
     def on_calibrate_clicked(self):
-        """
-        Called when the user clicks "Start Calibration" / "Capture View X" / etc.
-        If not calibrating yet, begin session. Otherwise, capture the next view.
-        """
         if not self.calibration_viewmodel.is_calibrating:
             # Initialize and start the calibration session
             self.calibration_viewmodel.begin_calibration_session()
@@ -218,9 +214,6 @@ class CalibrationPage(QWizardPage):
             self.calibration_viewmodel.reset_calibration()
 
     def capture_new_view(self):
-        """
-        Grab frames from each camera and send to the ViewModel for detection & storage.
-        """
         frames = []
         for i, camera_view in enumerate(self.camera_views):
             frame = camera_view.get_current_frame()
@@ -232,7 +225,6 @@ class CalibrationPage(QWizardPage):
         self.calibration_viewmodel.process_frames(frames)
 
     def update_camera_status(self, camera_id: int, status: str):
-        """Update status for a specific camera."""
         if 0 <= camera_id < len(self.camera_status_labels):
             label = self.camera_status_labels[camera_id]
             if "failed" in status.lower():
@@ -244,7 +236,6 @@ class CalibrationPage(QWizardPage):
             label.setText(status)
 
     def handle_view_captured(self, current: int, total: int):
-        """Handle successful view capture from the ViewModel."""
         self.view_progress.setText(f"Views: {current}/{total}")
         if current >= total:
             # All views captured, button might say "Complete" or be disabled
@@ -254,13 +245,11 @@ class CalibrationPage(QWizardPage):
             self.calibrate_btn.setText(f"Capture View {current + 1}")
 
     def update_guidance(self, guidance: str):
-        """Update guidance message displayed to the user."""
         # We might add a separate label for guidance if you like
         # For now, let's just reuse the status_label or a new label
         self.status_label.setText(guidance)
 
     def _format_calibration_results(self, results: dict) -> str:
-        """Format calibration results for display."""
         text = "Calibration Results:\n\n"
         if "overall_rms" in results:
             text += f"Overall RMS Error: {results['overall_rms']:.3f} px\n\n"
@@ -283,11 +272,9 @@ class CalibrationPage(QWizardPage):
         return text
 
     def update_status(self, status: str):
-        """Update the status message from the ViewModel."""
         self.status_label.setText(status)
 
     def update_progress(self, value: int):
-        """Update the progress bar from the ViewModel."""
         self.progress_bar.setValue(value)
 
     def _update_camera_overlays(self, detections, quality):

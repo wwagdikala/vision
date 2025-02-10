@@ -1,7 +1,7 @@
 {
   "calibration": {
       "target_type": "checkerboard",
-      "square_size": 13,
+      "square_size": 25,
       "required_angles": 3,
       "min_quality_score": "0.2",
       "min_coverage": 0.05,

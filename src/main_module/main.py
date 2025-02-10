@@ -1,9 +1,10 @@
 import sys
 from pathlib import Path
+import os
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 from main_module.views.main_window import MainWindow
 from services.service_locator import ServiceLocator
 from services.settings_service import SettingsService
@@ -28,8 +29,10 @@ from measurement_module.views.measurement_view import MeasurementView
 
 
 def initialize(locator):
+    
+    calibration_storage = CalibrationStorage()
     locator.register_service("settings_service", SettingsService())
-    locator.register_service("calibration_storage", CalibrationStorage())
+    locator.register_service("calibration_storage", calibration_storage)
     error_manager = ErrorManager()
 
     locator.register_service("error_manager", error_manager)

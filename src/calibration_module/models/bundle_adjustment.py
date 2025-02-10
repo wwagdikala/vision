@@ -184,7 +184,7 @@ class BundleAdjustment:
         try:
             if len(cameras) < 2:
                 return None
-
+    
             # Build projection matrices
             P = []
             for cam_idx in range(2):
@@ -193,79 +193,86 @@ class BundleAdjustment:
                 Rt = np.hstack([R, t])
                 K = cameras[cam_idx].camera_matrix
                 P.append(K @ Rt)
-
+    
             all_3d_errors = []
-
+            
+            # Track errors per view for outlier detection
+            view_errors = []
+    
             for view_idx in range(len(object_points)):
-                # Get 2D points for this view
-                corners_cam0 = (
-                    image_points[0][view_idx]
-                    if view_idx < len(image_points[0])
-                    else None
-                )
-                corners_cam1 = (
-                    image_points[1][view_idx]
-                    if view_idx < len(image_points[1])
-                    else None
-                )
-
+                corners_cam0 = image_points[0][view_idx] if view_idx < len(image_points[0]) else None
+                corners_cam1 = image_points[1][view_idx] if view_idx < len(image_points[1]) else None
+    
                 if corners_cam0 is None or corners_cam1 is None:
                     continue
-
-                # Prepare points for triangulation
+    
                 num_corners = min(len(corners_cam0), len(corners_cam1))
                 pts0 = corners_cam0[:num_corners].T.astype(np.float64)
                 pts1 = corners_cam1[:num_corners].T.astype(np.float64)
-
+    
                 # Triangulate points
                 hom_points_3d = cv2.triangulatePoints(P[0], P[1], pts0, pts1)
                 triangulated_3d = (hom_points_3d[:3, :] / hom_points_3d[3, :]).T
-
-                # Get corresponding known 3D points for this view
+    
+                # Get corresponding known 3D points
                 known_3d_subset = object_points[view_idx][:num_corners]
-
+    
+                # Compute simple rigid transformation without scale
                 try:
-                    # Handle different versions of OpenCV
-                    result = cv2.estimateAffine3D(
-                        known_3d_subset.reshape(-1, 1, 3),
-                        triangulated_3d.reshape(-1, 1, 3),
-                    )
-
-                    # Check if we got 3 or 4 return values
-                    if isinstance(result, tuple):
-                        if len(result) == 4:
-                            retval, rot, trans, scale = result
-                        else:
-                            retval, rot, trans = result
-                            scale = 1.0
-                    else:
-                        # Some versions return only the matrix
-                        rot = result
-                        retval, trans, scale = True, np.zeros((3, 1)), 1.0
-
-                    if retval:
-                        # Apply transformation
-                        known_ones = np.hstack(
-                            [known_3d_subset, np.ones((num_corners, 1))]
-                        )
-                        M = rot  # 3x4 transformation matrix
-                        aligned = known_ones @ M.T
-
-                        # Compute errors
-                        diffs = triangulated_3d - aligned
-                        errors = np.linalg.norm(diffs, axis=1)
-                        all_3d_errors.extend(errors.tolist())
-
+                    R, t = self._estimate_rigid_transform(known_3d_subset, triangulated_3d)
+                    transformed_points = (R @ triangulated_3d.T + t.reshape(-1, 1)).T
+                    
+                    # Compute errors for this view
+                    view_error = np.linalg.norm(transformed_points - known_3d_subset, axis=1)
+                    view_errors.append(np.median(view_error))
+                    all_3d_errors.extend(view_error.tolist())
+                    
                 except Exception as e:
-                    print(f"Error in 3D alignment for view {view_idx}: {str(e)}")
+                    print(f"Error in alignment for view {view_idx}: {str(e)}")
                     continue
-
-            # Compute final RMS
+    
             if len(all_3d_errors) > 0:
-                rms_3d = float(np.sqrt(np.mean(np.square(all_3d_errors))))
-                return rms_3d
+                # Filter out outlier views
+                median_view_error = np.median(view_errors)
+                mad = np.median(np.abs(view_errors - median_view_error))
+                threshold = median_view_error + 2.5 * mad  # Use MAD for robust outlier detection
+                
+                # Only use errors from good views
+                filtered_errors = [err for err, view_err in zip(all_3d_errors, view_errors) 
+                                 if view_err <= threshold]
+                
+                if filtered_errors:
+                    rms_3d = float(np.sqrt(np.mean(np.square(filtered_errors))))
+                    return rms_3d
             return None
-
+    
         except Exception as e:
             print(f"Bundle adjustment 3D error computation failed: {str(e)}")
             return None
+    
+    def _estimate_rigid_transform(self, A, B):
+        """
+        Estimate rigid transformation between two point sets without scale.
+        """
+        # Center the points
+        centroid_A = np.mean(A, axis=0)
+        centroid_B = np.mean(B, axis=0)
+        
+        # Center the points
+        AA = A - centroid_A
+        BB = B - centroid_B
+        
+        # Compute rotation
+        H = AA.T @ BB
+        U, _, Vt = np.linalg.svd(H)
+        R = Vt.T @ U.T
+        
+        # Ensure right-handed coordinate system
+        if np.linalg.det(R) < 0:
+            Vt[-1,:] *= -1
+            R = Vt.T @ U.T
+        
+        # Compute translation
+        t = centroid_A - R @ centroid_B
+        
+        return R, t

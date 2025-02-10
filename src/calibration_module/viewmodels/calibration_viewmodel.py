@@ -171,6 +171,7 @@ class CalibrationViewModel(QObject):
                     rotations=self.calibration_model.rotations,
                     translations=self.calibration_model.translations,
                 )
+                calibration_storage.save_calibration_json()
                 print("Calibration results stored successfully")
             except Exception as e:
                 print(f"Failed to store calibration: {str(e)}")
@@ -290,18 +291,19 @@ class CalibrationViewModel(QObject):
         self.status_changed.emit(error_msg)
 
     def reset_calibration(self):
-        """Reset calibration state and clear all data."""
-        print("Resetting calibration state")
-        self.is_calibrating = False
-        self.calibration_successful = False
-        self.current_view = 0
-        self.calibration_model.reset()
-        self.status_changed.emit("Calibration reset")
-        self._clear_overlay()
-        self.button_text_changed.emit("Start Calibration")
-        self.button_enabled_changed.emit(True)
-        self.button_reset_changed.emit(False)
-        self.progress_visible_changed.emit(False)
-        self.guidance_updated.emit("")
-        self.camera_status_updated.emit(0, "")
-        self.camera_status_updated.emit(1, "")
+        self.begin_calibration_session()
+        # """Reset calibration state and clear all data."""
+        # print("Resetting calibration state")
+        # self.is_calibrating = False
+        # self.calibration_successful = False
+        # self.current_view = 0
+        # self.calibration_model.reset()
+        # self.status_changed.emit("Calibration reset")
+        # self._clear_overlay()
+        # self.button_text_changed.emit("Start Calibration")
+        # self.button_enabled_changed.emit(True)
+        # self.button_reset_changed.emit(False)
+        # self.progress_visible_changed.emit(False)
+        # self.guidance_updated.emit("")
+        # self.camera_status_updated.emit(0, "")
+        # self.camera_status_updated.emit(1, "")
